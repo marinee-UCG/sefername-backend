@@ -10,7 +10,7 @@ class User(Base):
 
     id:Mapped[int]=mapped_column(primary_key=True)
     email:Mapped[str]=mapped_column(String(255),unique=True,index=True)
-    hushed_password:Mapped[str]=mapped_column(String(255))
+    hashed_password:Mapped[str]=mapped_column(String(255))
     full_name:Mapped[str]=mapped_column(String(100))
     rank:Mapped[str|None]=mapped_column(String(50))
     created_at:Mapped[datetime]=mapped_column(
