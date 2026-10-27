@@ -1,7 +1,13 @@
 from datetime import date
 
 from sqlalchemy import ForeignKey,String
-from sqlalchemy.orm import Mapped,mapped_column
+from sqlalchemy.orm import Mapped,mapped_column,relationship
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.vessel import Vessel
+
 
 from app.database import Base
 
@@ -15,3 +21,4 @@ class Contract(Base):
     rank:Mapped[str]=mapped_column(String(50))
     start_date:Mapped[date]
     end_date:Mapped[date | None]
+    vessel:Mapped["Vessel"]=relationship()
