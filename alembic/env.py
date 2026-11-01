@@ -7,7 +7,7 @@ from alembic import context
 
 from app.core.config import settings
 from app.database import Base
-from app.models import user, vessel,contract,certificate
+from app.models import user, vessel,contract,certificate,identitiy_document
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
