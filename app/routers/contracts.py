@@ -13,6 +13,22 @@ from app.schemas.contract import ContractCreate,ContractOut,ContractUpdate
 
 router=APIRouter(prefix="/contracts",tags=["contracts"])
 
+def get_user_contract_or_404(
+        contract_id:int,
+        db:Session=Depends(get_db),
+        current_user:User=Depends(get_current_user),
+):
+    query=select(Contract).where(Contract.id==contract_id,Contract.user_id==current_user.id)
+    selected_contract=db.scalar(query)
+    if selected_contract is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Contract not found"
+        )
+    return selected_contract
+
+
+
 
 @router.get("",response_model=list[ContractOut])
 def get_contract(current_user:User=Depends(get_current_user),db:Session=Depends(get_db)):
@@ -75,6 +91,68 @@ def create_contract(
     db.commit()
     db.refresh(contract)
     return contract
+
+@router.get("/{contract_id}",response_model=ContractOut)
+def get_contract_by_id(contract:Contract=Depends(get_user_contract_or_404)):
+    return contract
+@router.delete("/{contract_id}",status_code=status.HTTP_204_NO_CONTENT)
+def delete_contract_by_id(contract:Contract=Depends(get_user_contract_or_404),db:Session=Depends(get_db)):
+    db.delete(contract)
+    db.commit()
+
+@router.patch("/{contract_id}", response_model=ContractOut)
+def update_contract(
+    contract_in: ContractUpdate,
+    contract: Contract = Depends(get_user_contract_or_404),
+    db: Session = Depends(get_db),
+):
+    update_data = contract_in.model_dump(exclude_unset=True)
+
+    # Açık 1: zorunlu alanlara null gönderilmesin
+    for field in ("company", "rank", "start_date"):
+        if field in update_data and update_data[field] is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"{field} cannot be null.",
+            )
+
+    # Tarih kontrolü: güncelleme sonrası oluşacak değerlerle
+    new_start = update_data.get("start_date", contract.start_date)
+    new_end = update_data.get("end_date", contract.end_date)
+    if new_end is not None and new_end <= new_start:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="End date must be after start date.",
+        )
+
+    # Açık 2: bitmiş kontrat yeniden açılıyorsa başka aktif kontrat olmasın
+    reopening = (
+        "end_date" in update_data
+        and update_data["end_date"] is None
+        and contract.end_date is not None
+    )
+    if reopening:
+        other_active = db.scalar(
+            select(Contract).where(
+                Contract.user_id == contract.user_id,
+                Contract.end_date.is_(None),
+                Contract.id != contract.id,
+            )
+        )
+        if other_active is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="You already have an active contract. Complete it before reopening this one.",
+            )
+
+    for key, value in update_data.items():
+        setattr(contract, key, value)
+    db.commit()
+    db.refresh(contract)
+    return contract
+
+    
+
 
 
  
