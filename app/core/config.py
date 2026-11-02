@@ -5,6 +5,8 @@ class Settings(BaseSettings):
     secret_key:str
     algorithm:str="HS256"
     access_token_expire_minutes:int = 30
+    upload_dir:str="uploads"
+    max_upload_size_mb:int=10
 
     model_config=SettingsConfigDict(env_file=".env")
 

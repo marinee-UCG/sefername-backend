@@ -37,6 +37,7 @@ def list_certificates(
 @router.get("/{certificate_id}",response_model=CertificateOut)
 def get_certificate_by_id(certificate:Certificate=Depends(get_user_certificate_or_404)):
     return certificate
+
 @router.delete("/{certificate_id}",status_code=status.HTTP_204_NO_CONTENT)
 def delete_certificate_by_id(certificate:Certificate=Depends(get_user_certificate_or_404),db:Session=Depends(get_db)):
     db.delete(certificate)

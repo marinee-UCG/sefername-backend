@@ -1,12 +1,15 @@
-from fastapi import APIRouter,Depends,HTTPException,status
+from fastapi import APIRouter,Depends,HTTPException,status,File,Form,UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from fastapi.responses import FileResponse
+from pathlib import Path
 
 from app.core.deps import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.models.identity_document import IdentityDocument
-from app.schemas.identity_document import IdentityDocumentCreate,IdentityDocumentOut,IdentityDocumentUpdate
+from app.schemas.identity_document import IdentityDocumentCreate,IdentityDocumentOut,IdentityDocumentUpdate,DocType
+from app.core.storage import FileTooLargeError,UnsupportedFileTypeError,save_upload,delete_file
 
 router=APIRouter(prefix="/identity-documents",tags=["identity-documents"])
 
@@ -56,11 +59,18 @@ def get_document_by_id(document:IdentityDocument=Depends(get_user_identity_docum
    
    return document
 
-@router.delete("/{document_id}",status_code=status.HTTP_204_NO_CONTENT)
-def delete_document_by_id(document:IdentityDocument=Depends(get_user_identity_document_or_404),db:Session=Depends(get_db)):
-   
-   db.delete(document)
-   db.commit()
+@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_identity_document(
+    document: IdentityDocument = Depends(get_user_identity_document_or_404),
+    db: Session = Depends(get_db),
+):
+    file_path = document.file_path
+
+    db.delete(document)
+    db.commit()
+
+    if file_path is not None:
+        delete_file(file_path)
    
 @router.patch("/{document_id}", response_model=IdentityDocumentOut)
 def update_identity_document(
@@ -91,6 +101,79 @@ def update_identity_document(
     db.commit()
     db.refresh(document)
     return document
+
+
+@router.post("/upload", response_model=IdentityDocumentOut, status_code=status.HTTP_201_CREATED)
+def upload_identity_document(
+    doc_type: DocType = Form(...),
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    # 1. Dosyayı kaydet; storage'ın hatalarını HTTP koduna çevir
+    try:
+        file_path = save_upload(file, current_user.id)
+    except FileTooLargeError:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f"File is too large. Maximum size is {settings.max_upload_size_mb} MB.",
+        )
+    except UnsupportedFileTypeError:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Unsupported file type. Only PDF, JPG and PNG are allowed.",
+        )
+
+    # 2. Kaydı oluştur: veri henüz okunmadı, onaylanmadı
+    document = IdentityDocument(
+        doc_type=doc_type,
+        file_path=file_path,
+        user_id=current_user.id,
+        verified=False,
+    )
+
+    # 3. Kaydet; başarısız olursa diske yazılan dosyayı temizle
+    db.add(document)
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        delete_file(file_path)
+        raise
+
+    db.refresh(document)
+    return document
+
+
+MEDIA_TYPES = {
+    ".pdf": "application/pdf",
+    ".jpg": "image/jpeg",
+    ".png": "image/png",
+}
+
+
+@router.get("/{document_id}/file")
+def download_identity_document_file(
+    document: IdentityDocument = Depends(get_user_identity_document_or_404),
+):
+    if document.file_path is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This document has no file.",
+        )
+
+    path = Path(document.file_path)
+    if not path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File not found.",
+        )
+
+    return FileResponse(
+        path,
+        media_type=MEDIA_TYPES.get(path.suffix, "application/octet-stream"),
+        filename=f"{document.doc_type}{path.suffix}",
+    )
 
 
    
