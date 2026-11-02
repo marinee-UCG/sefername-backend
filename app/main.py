@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
 
-from app.routers import auth,contracts,vessels,identity_document
+from app.routers import auth,contracts,vessels,identity_document,certificates
 
 
 
@@ -11,4 +11,5 @@ app.include_router(auth.router)
 app.include_router(contracts.router)
 app.include_router(vessels.router)
 app.include_router(identity_document.router)
+app.include_router(certificates.router)
 
