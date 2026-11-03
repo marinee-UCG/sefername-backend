@@ -55,6 +55,9 @@ def parse_mrz_date(yymmdd: str, is_expiry: bool, today: date) -> date | None:
 
 def parse_names(name_field: str) -> tuple[str | None, str | None]:
     surname, _, given_names = name_field.partition("<<")
+    # Given names end at the next "<<"; everything after it is filler
+    # (and OCR often misreads long "<<<<" runs as "KKKK").
+    given_names, _, _ = given_names.partition("<<")
     return clean_field(surname), clean_field(given_names)
 
 
