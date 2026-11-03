@@ -76,7 +76,7 @@ seafarer-panel-backend/
     ├── models/         (user, vessel, contract, certificate, identity_document)
     ├── schemas/        (user, vessel, contract, certificate, identity_document)
     ├── routers/        (auth, contracts, vessels, certificates, identity_documents)
-    └── services/       (iş mantığı; mrz.py yazılacak)
+    └── services/       (iş mantığı: mrz.py, mrz_ocr.py)
 ```
 
 ### Mimari kurallar
@@ -136,18 +136,21 @@ seafarer-panel-backend/
 - **Certificate:** user_id, cert_name (150), cert_number, issue_date, expiry_date?, issuing_inst
 - **IdentityDocument:** user_id, doc_type, document_number?, issuing_country?, issue_date?, expiry_date?, file_path?, extracted_data (JSONB)?, verified, created_at
 
-### Sıradaki iş: pasaport MRZ okuyucu (AI'sız, lokal OCR)
-Dosya: `app/services/mrz.py`
-1. `compute_check_digit(data: str) -> int` — **kullanıcı yazacak.** ICAO 9303: rakam=değeri, A–Z=10–35, `<`=0; ağırlıklar 7,3,1 tekrar; toplam % 10.
-   Test (ICAO örneği): `"740812"`→2, `"L898902C3"`→6, `"120415"`→9
-   ```
-   P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<
-   L898902C36UTO7408122F1204159ZE184226B<<<<<10
-   ```
-2. TD3 ayrıştırma (2 × 44 karakter) + tüm kontrol haneleri + genel kontrol hanesi; tarihlerde yüzyıl çözümü.
-3. Görüntü boru hattı: PDF → resim (pymupdf) → alt kısmı kes → gri ton → Tesseract (whitelist `A-Z0-9<`) → 44 karakterlik iki satırı bul.
-4. Endpoint: yüklenen belgeden çıkar → `extracted_data` + alanları doldur, `verified=False`; kullanıcı PATCH ile onaylar.
-5. Liman cüzdanı çıkarma: yöntem sonra kararlaştırılacak (MRZ yok).
+### Pasaport MRZ okuyucu (AI'sız, lokal OCR) — devam ediyor
+- **`app/services/mrz.py`** (saf metin mantığı, Tesseract'sız test edilebilir):
+  - `char_value`, `compute_check_digit` — **kullanıcı yazdı.** ICAO 9303: rakam=değeri, A–Z=10–35, `<`=0; ağırlıklar 7,3,1; toplam % 10. Test: `"740812"`→2, `"L898902C3"`→6, `"120415"`→9
+  - `parse_td3(line1, line2)` → dict (`extracted_data`'ya doğrudan yazılabilir; tarihler ISO metin). Kontrol hanesi tutmazsa hata **fırlatmaz**, `checks` içinde `False` + `all_checks_passed` döner. Sadece yapısal sorunlarda `MRZError`.
+  - Yüzyıl kuralı: doğum → gelecekteyse 1900'ler; son kullanma → hep 2000'ler. Okunamayan tarih → `None`.
+- **`app/services/mrz_ocr.py`**: `extract_passport_data(path)` → PDF (300 DPI, en fazla 3000 px genişlik) / JPG / PNG → alt %35, tüm sayfa, 180° çevrilmiş → gri ton + siyah-beyaz varyant → Tesseract (`eng`, whitelist `A-Z0-9<`) → konuma göre düzeltme (harf alanlarında 0→O, rakam alanlarında O→0) → tüm kontrolleri geçen ilk sonuç, yoksa ilk okunabilen. Bulunamazsa `MRZNotFoundError` (`MRZError` alt sınıfı).
+- ICAO örneği (`P<UTOERIKSSON<<ANNA<MARIA...` / `L898902C36UTO7408122F1204159ZE184226B<<<<<10`) sentetik görsellerde okunuyor.
+- **Açık sorun:** Tesseract `eng` modeli pasaport fontunu (OCR-B) tanımıyor. Kullanıcının gerçek pasaportunda `<`→`K` (isim `UGUR CAN` yerine `UGUR KCANK K`) ve `9`→`I` (doğum yılı; kontrol hanesi yakaladı) hataları var; süre ~17 sn. Çözüm: OCR-B / MRZ `.traineddata` modeli (projede bir klasöre, `--tessdata-dir` ile). Henüz kurulmadı.
+
+### Sıradaki işler (sırayla)
+1. **MRZ endpoint'i:** yüklenen pasaporttan `extract_passport_data` → `extracted_data` + alanları doldur, `verified=False`; kullanıcı PATCH ile onaylar. `MRZError` → router'da HTTP koduna çevrilir. Önce plan.
+2. **pytest:** `mrz.py` ile başla (saf fonksiyonlar), sonra endpoint testleri.
+3. **Frontend:** önce palet (bölüm 7), sonra React + Vite, CORS.
+4. Liman cüzdanı çıkarma: yöntem sonra kararlaştırılacak (MRZ yok).
+5. OCR-B modeli ile isim doğruluğu.
 
 ### Bilinen açıklar / yapılacaklar
 - Kullanıcı silinince `uploads/<user_id>/` temizlenmeli (kullanıcı silme endpoint'i eklendiğinde)

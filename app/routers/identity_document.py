@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from fastapi.responses import FileResponse
 from pathlib import Path
 
+from app.core.config import settings
 from app.core.deps import get_current_user
 from app.database import get_db
 from app.models.user import User
