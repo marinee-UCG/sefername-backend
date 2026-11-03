@@ -3,6 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from fastapi.responses import FileResponse
 from pathlib import Path
+from datetime import date
 
 from app.core.config import settings
 from app.core.deps import get_current_user
@@ -11,6 +12,8 @@ from app.models.user import User
 from app.models.identity_document import IdentityDocument
 from app.schemas.identity_document import IdentityDocumentCreate,IdentityDocumentOut,IdentityDocumentUpdate,DocType
 from app.core.storage import FileTooLargeError,UnsupportedFileTypeError,save_upload,delete_file
+from app.services.mrz import MRZError
+from app.services.mrz_ocr import extract_passport_data
 
 router=APIRouter(prefix="/identity-documents",tags=["identity-documents"])
 
@@ -182,6 +185,7 @@ def extract_identity_document_data(
     document:IdentityDocument=Depends(get_user_identity_document_or_404),
     db:Session=Depends(get_db),
 ):
+    # 1. Ucuz kontroller: OCR'dan (yavaş) önce
     if document.doc_type != "passport":
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -192,4 +196,37 @@ def extract_identity_document_data(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="This document has no file to read. Upload a passport first."
         )
+    if not Path(document.file_path).exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File not found."
+        )
+    if document.verified:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This document is already verified. Set verified to false to read it again."
+        )
+
+    # 2. OCR: MRZ'yi oku; services'in hatasini HTTP koduna cevir
+    try:
+        result = extract_passport_data(document.file_path)
+    except MRZError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Could not read the passport MRZ. Make sure the two lines at the bottom "
+                   "are clearly visible, or enter the details manually."
+        )
+
+    # 3. Veri minimizasyonu: TC kimlik no (kisisel no) saklanmaz
+    result.pop("personal_number", None)
+
+    # 4. Alanlari doldur; kullanici onaylayana kadar verified=False
+    document.extracted_data = result
+    document.document_number = result["document_number"]
+    document.issuing_country = result["issuing_country"]
+    document.expiry_date = date.fromisoformat(result["expiry_date"]) if result["expiry_date"] else None
+    document.verified = False
+
+    db.commit()
+    db.refresh(document)
     return document
