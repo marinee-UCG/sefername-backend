@@ -148,7 +148,7 @@ seafarer-panel-backend/
 ### Sıradaki işler (sırayla)
 1. ~~MRZ endpoint'i~~ **bitti:** `POST /identity-documents/{id}/extract` (sırayla: pasaport değil 422, dosya yok 422, dosya diskte yok 404, onaylı 409, `MRZError` 422). `personal_number` (TC kimlik no) **saklanmaz** (veri minimizasyonu). `verified=False` kalır.
 2. **pytest — yarıda bırakıldı, frontend'den sonra dönülecek:** kurulu (`pytest.ini`: `pythonpath = .`, `testpaths = tests`). `tests/test_mrz.py`'de 5 test var (3 kontrol hanesi, `pytest.raises` ile küçük harf, ICAO `parse_td3` sözlük+döngü). Kaldığı yer: 6. adım, OCR hatası testi (`L898`→`LB98`; `checks.document_number` False, `birth_date` True). Sonra endpoint testleri (httpx2 + TestClient).
-3. **Frontend:** önce palet (bölüm 7), sonra React + Vite, CORS.
+3. **Frontend:** palet, tipografi ve hareket kuralları **belirlendi** (bölüm 7, `design/preview.html`). Sıradaki: React + Vite kurulumu, tokenları CSS değişkeni olarak taşımak, backend'de CORS.
 4. Liman cüzdanı çıkarma: yöntem sonra kararlaştırılacak (MRZ yok).
 5. OCR-B modeli ile isim doğruluğu.
 
@@ -197,31 +197,94 @@ Bu konseptlerin hepsi şu anki veri modelinin (kontrat, gemi, sertifika, belge) 
 
 ## 7. Tasarım sistemi
 
-**Hedef:** Rafine, ölçülü, premium. Apple'ın detaya gösterdiği özenden ilham, arayüzünü kopyalamadan. **AI yapımı gibi görünmemeli.**
+**Hedef:** Premium, rafine, ölçülü. Apple veya Instagram'ın elinden çıkmış gibi profesyonel hissettirmeli: her hover, basış ve geçiş düşünülmüş. **AI yapımı gibi görünmemeli.**
 
-### Palet
-- **Henüz belirlenmedi.** Herhangi bir arayüz yazılmadan önce kullanıcıyla birlikte tek bir palet belirlenecek ve design token olarak tanımlanacak (CSS değişkenleri; açık + koyu tema).
-- Sonrasında **paletin dışına asla çıkılmaz**; tek seferlik renk eklenmez. Yeni bir renk ihtiyacı doğarsa önce palete eklenmesi tartışılır.
+**Canlı referans:** `C:\Users\canug\Desktop\seafarer-panel\design\preview.html` (tüm tokenlar, butonlar, animasyonlar; tarayıcıda aç). Frontend'de tokenlar buradan kopyalanır.
+
+### İlham (ne alınır, ne alınmaz)
+- **Strava:** büyük tabular istatistikler, rota haritası bir kez çizilerek gelir, aktivite kartı düzeni. → Sea Ledger, Voyage, The Chart.
+- **Apple Store:** bol boşluk, hap şeklinde butonlar, kesin tipografi, ölçülü hover. Yarı saydam bulanık üst bar (sadece orada).
+- **Apple Music:** sade listeler, satır hover'ı, iOS anahtar ve segmentli seçici.
+- **Instagram:** paylaşılabilir kart formatları (gönderi 4:5, story 9:16), dokunmaya anında "pop" geri bildirimi (gemi arkadaşı onayı).
+- Arayüzleri **kopyalanmaz**; his ve detay özeni alınır.
+
+### Palet (paletin dışına asla çıkılmaz)
+Tek vurgu rengi ilkesi: vurgu sadece butonlar, linkler, rotalar, limanlar ve "Aktif" rozetinde. Olumlu durumlar ("Geçerli") için ayrı yeşil yok, `--text-muted` kullanılır. Yeni renk gerekirse önce palete eklenmesi tartışılır. Tüm metin renkleri iki temada da kontrast ≥ 4.5 (ölçüldü, en düşük 5.0).
+
+| Token | Açık | Koyu | Kullanım |
+|---|---|---|---|
+| `--bg` | `#F6F6F4` | `#121519` | zemin, ikincil paneller |
+| `--surface` | `#FFFFFF` | `#1A1E23` | kartlar, form alanları |
+| `--text` | `#121519` | `#F6F6F4` | ana metin, ikonlar |
+| `--text-muted` | `#5B6168` | `#9AA0A6` | açıklamalar, etiketler |
+| `--line` | `#D6D8D8` | `#2A2F35` | kenarlıklar, ayraçlar |
+| `--accent` | `#1E6B66` | `#4FA39C` | tek vurgu |
+| `--accent-hover` | `#164F4B` | `#6DBAB3` | vurgunun hover/basılı hâli |
+| `--on-accent` | `#FFFFFF` | `#121519` | vurgu zeminindeki metin |
+| `--accent-soft` | vurgu %10 | vurgu %14 | ikincil buton, satır hover'ı, "Aktif" rozeti zemini |
+| `--warning` | `#9A5B0E` | `#E3B15A` | süresi yaklaşan, şüpheli OCR alanı |
+| `--danger` | `#A93226` | `#E57A6E` | süresi dolmuş, hata |
+
+**Paylaşım kartları (Voyage, Homebound, Sea Ledger...) henüz tasarlanmadı.** En sona bırakıldı; kullanıcı o aşamada farklı istekler getirecek. `preview.html`'deki 4:5 kart sadece yer tutucu, kural değil.
 
 ### Tipografi
-- Font: **Manrope**
-- Tutarlı bir tip ölçeği ve hiyerarşi kur.
-- Ağırlıklar sadece **400, 500, 600, 700**.
-- Aşırı büyük başlıklar, aşırı kalın metin ve dekoratif tipografi yok.
-- İstatistiklerde, tarihlerde, sürelerde ve ölçümlerde (gün sayıları, DWT, kW, deniz mili) **tabular rakamlar** (`font-variant-numeric: tabular-nums`).
-- Mükemmel okunabilirlik ve tutarlı satır yükseklikleri.
+- Font **Manrope**; ağırlıklar sadece **400** (metin), **500** (etiket, sayı), **600** (başlık, buton), **700** (sadece marka adı).
+- Aşırı büyük başlık, aşırı kalın metin, dekoratif tipografi yok.
+- Tüm sayılarda (gün, tarih, mesafe, DWT, kW, deniz mili) **`font-variant-numeric: tabular-nums`**.
+
+| Ad | Boyut / satır yüksekliği | Kullanım |
+|---|---|---|
+| Display | 28 / 34 | sadece istatistik sayıları |
+| Title | 22 / 28 | sayfa başlığı |
+| Subhead | 18 / 26 | bölüm başlığı |
+| Body | 16 / 24 | ana metin |
+| Small | 14 / 20 | liste, form, buton |
+| Caption | 12 / 16 | etiket, yardım metni; büyük harf etiketlerde `letter-spacing: .08em` |
+
+### Şekil ve boşluk
+- Köşe: `--r-sm` 8 (form alanı), `--r-md` 14 (kart, liste), `--r-lg` 22 (paylaşım kartı, sheet), `--r-full` (buton, rozet, anahtar, seçici).
+- Boşluk 4 px ızgarası: 4, 8, 12, 16, 24, 32, 48.
+- Kartlar gölgesiz, 1 px `--line` kenarlıkla ayrılır. **Gölge (`--shadow-float`) sadece yüzen katmanlarda:** toast, sheet, menü.
+- Yarı saydam bulanık arka plan (`backdrop-filter`) **sadece üst barda**.
+- Dokunma hedefi en az **44 px** (Apple kuralı).
+
+### Hareket
+| Token | Değer | Kullanım |
+|---|---|---|
+| `--dur-1` | 120 ms | basma, renk değişimi |
+| `--dur-2` | 200 ms | hover, anahtar, seçici |
+| `--dur-3` | 320 ms | giriş/çıkış (toast, sheet), tema geçişi |
+| `--dur-draw` | 1400 ms | rota çizimi, sayaç; **sadece bir kez** |
+| `--ease-out` | `cubic-bezier(0.22, 1, 0.36, 1)` | varsayılan |
+| `--ease-in-out` | `cubic-bezier(0.65, 0, 0.35, 1)` | iki durum arası geçiş |
+| `--ease-spring` | `cubic-bezier(0.34, 1.56, 0.64, 1)` | sadece "pop" geri bildirimi (onay, anahtar topu) |
+| `--press-scale` | 0.97 | basılı buton |
+
+Kurallar:
+- Her hareketin bir amacı olur (geri bildirim, yön, durum değişimi). Süs animasyonu, sürekli dönen/titreyen şey yok.
+- Sadece `transform` ve `opacity` canlandırılır (akıcı 60 fps); genişlik/yükseklik/konum canlandırılmaz.
+- `prefers-reduced-motion: reduce` açıksa animasyonlar kapanır.
+
+### Etkileşim durumları
+- **Hover** (sadece `@media (hover: hover)`, telefonda yok): renk `--accent-hover`'a koyulaşır; liste satırına `--accent-soft` zemini, ok işareti 3 px sağa. Yukarı kalkma, gölge, büyüme yok.
+- **Basma:** buton `scale(0.97)`, 120 ms.
+- **Odak:** sadece klavyeyle (`:focus-visible`): 2 px zemin + 2 px vurgu halkası.
+- **Devre dışı:** opaklık 0.4, hover/basma yok.
+- **Yükleniyor:** dönen çark yerine gelecek alanların iskeleti (shimmer); butonda küçük çark + "Okunuyor". Veri gelince alanlar 60 ms arayla belirir.
+- **Başarı:** alttan çıkan toast (320 ms), 2.4 sn sonra kaybolur.
+- Buton türleri: birincil (dolu vurgu), ikincil (`--accent-soft` zemin), düz (sadece metin).
 
 ### "AI yapımı gibi görünmesin" — kaçınılacaklar
 - Mor-mavi gradyanlar, her yerde glassmorphism, neon parlamalar
-- Her şeyin yuvarlak köşeli kart + gölge olduğu düzenler; her şeyin ortalandığı sayfalar
+- Her kartta gölge; her şeyin ortalandığı sayfalar
 - Emoji ikonlar, jenerik ikon setlerinin rastgele kullanımı, stok illüstrasyonlar
 - Jenerik "hero" bölümleri ve pazarlama dili, lorem ipsum
-- Gereksiz animasyon
+- Gereksiz veya tekrar eden animasyon
 
 ### Yön
-- Kendine has bir görsel dil: deniz haritası referansları (ince kazınmış çizgiler, harita tipografisi hissi, koordinat/ölçek detayları) ölçülü şekilde.
+- Kendine has görsel dil: deniz haritası referansları (ince kazınmış ızgara çizgileri, koordinat/ölçek detayları, rota çizgisi) ölçülü şekilde.
 - Gerçek verilerle tasarla.
-- Paylaşılabilir kartlar (Voyage, Homebound, Sea Ledger...) aynı tasarım dilini taşımalı ve tanınabilir olmalı.
+- Paylaşılabilir kartlar en son tasarlanacak; kullanıcıyla sıfırdan konuşulacak. Kendi kendine kart stili belirleme.
 
 ---
 
