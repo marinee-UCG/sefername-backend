@@ -2,7 +2,7 @@
 
 def char_value(c:str) -> int:
     if len(c) != 1:
-        raise ValueError(f"Expected a single character,got {c!r}")
+        raise ValueError(f"Expected a single character, got {c!r}")
     if c.isdigit():
         return int(c)
     if "A"<=c<="Z":
@@ -12,10 +12,10 @@ def char_value(c:str) -> int:
     raise ValueError(f"Invalid MRZ character: {c!r}")
 
 
-def compute_check_digit(c:str) -> int:
+def compute_check_digit(data:str) -> int:
     weights=[7,3,1]
     total = 0
-    for i,c in enumerate(c):
+    for i,c in enumerate(data):
         total +=char_value(c)*weights[i%3]
     return total % 10 
   
