@@ -146,8 +146,8 @@ seafarer-panel-backend/
 - **Açık sorun:** Tesseract `eng` modeli pasaport fontunu (OCR-B) tanımıyor. Kullanıcının gerçek pasaportunda `<`→`K` (isim `UGUR CAN` yerine `UGUR KCANK K`) ve `9`→`I` (doğum yılı; kontrol hanesi yakaladı) hataları var; süre ~17 sn. Çözüm: OCR-B / MRZ `.traineddata` modeli (projede bir klasöre, `--tessdata-dir` ile). Henüz kurulmadı.
 
 ### Sıradaki işler (sırayla)
-1. **MRZ endpoint'i:** yüklenen pasaporttan `extract_passport_data` → `extracted_data` + alanları doldur, `verified=False`; kullanıcı PATCH ile onaylar. `MRZError` → router'da HTTP koduna çevrilir. Önce plan.
-2. **pytest:** `mrz.py` ile başla (saf fonksiyonlar), sonra endpoint testleri.
+1. ~~MRZ endpoint'i~~ **bitti:** `POST /identity-documents/{id}/extract` (sırayla: pasaport değil 422, dosya yok 422, dosya diskte yok 404, onaylı 409, `MRZError` 422). `personal_number` (TC kimlik no) **saklanmaz** (veri minimizasyonu). `verified=False` kalır.
+2. **pytest — yarıda bırakıldı, frontend'den sonra dönülecek:** kurulu (`pytest.ini`: `pythonpath = .`, `testpaths = tests`). `tests/test_mrz.py`'de 5 test var (3 kontrol hanesi, `pytest.raises` ile küçük harf, ICAO `parse_td3` sözlük+döngü). Kaldığı yer: 6. adım, OCR hatası testi (`L898`→`LB98`; `checks.document_number` False, `birth_date` True). Sonra endpoint testleri (httpx2 + TestClient).
 3. **Frontend:** önce palet (bölüm 7), sonra React + Vite, CORS.
 4. Liman cüzdanı çıkarma: yöntem sonra kararlaştırılacak (MRZ yok).
 5. OCR-B modeli ile isim doğruluğu.
@@ -156,7 +156,9 @@ seafarer-panel-backend/
 - Kullanıcı silinince `uploads/<user_id>/` temizlenmeli (kullanıcı silme endpoint'i eklendiğinde)
 - Refresh token, login rate limiting
 - Dosyaların ve hassas alanların şifrelenmesi
-- Otomatik testler (pytest) — şu an Swagger'da elle test ediliyor
+- Otomatik testler: sadece `mrz.py` için başladı; endpoint'ler hâlâ Swagger'da elle test ediliyor
+- Şifre kuralı `UserCreate`'te min 5 / **max 8** — yanlış; min 12, max 64 gibi olmalı
+- `requirements.txt` güncellerken `>` kullanma (PowerShell 5.1 UTF-16 yazar): `pip freeze | Out-File -Encoding ascii requirements.txt`
 - CORS (frontend başlayınca)
 
 ---
