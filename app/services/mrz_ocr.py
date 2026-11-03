@@ -7,6 +7,7 @@ from PIL import Image, ImageOps
 from app.services.mrz import TD3_LINE_LENGTH, MRZError, parse_td3
 
 PDF_RENDER_DPI = 300
+PDF_MAX_WIDTH = 3000   # pixels; some PDFs have huge pages, cap them to keep OCR fast
 MIN_IMAGE_WIDTH = 1500
 BOTTOM_CROP_RATIO = 0.35
 BINARY_THRESHOLD = 140
@@ -31,7 +32,9 @@ def load_image(path: str) -> Image.Image:
         with pymupdf.open(path) as doc:
             if doc.page_count == 0:
                 raise MRZNotFoundError("PDF has no pages")
-            pixmap = doc[0].get_pixmap(dpi=PDF_RENDER_DPI)
+            page = doc[0]
+            zoom = min(PDF_RENDER_DPI / 72, PDF_MAX_WIDTH / page.rect.width)
+            pixmap = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom))
             return Image.frombytes("RGB", (pixmap.width, pixmap.height), pixmap.samples)
     with Image.open(path) as img:
         # Phone photos store rotation in EXIF; apply it so the text is upright.
