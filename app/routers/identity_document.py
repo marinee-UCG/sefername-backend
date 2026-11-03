@@ -177,4 +177,19 @@ def download_identity_document_file(
     )
 
 
-   
+@router.post("/{document_id}/extract",response_model=IdentityDocumentOut)
+def extract_identity_document_data(
+    document:IdentityDocument=Depends(get_user_identity_document_or_404),
+    db:Session=Depends(get_db),
+):
+    if document.doc_type != "passport":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="MRZ extraction is only supported for passports."
+        )
+    if document.file_path is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="This document has no file to read. Upload a passport first."
+        )
+    return document
