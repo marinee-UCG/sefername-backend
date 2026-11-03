@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     upload_dir:str="uploads"
     max_upload_size_mb:int=10
     cors_origins:list[str]=["http://localhost:5173"]
+    cookie_secure:bool=False
+    
 
     model_config=SettingsConfigDict(env_file=".env")
 

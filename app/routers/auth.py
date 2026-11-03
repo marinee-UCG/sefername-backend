@@ -1,14 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status,Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from fastapi.security import OAuth2PasswordRequestForm
-from app.core.security import hash_password,verify_password,create_access_token
+from app.core.security import hash_password,verify_password,create_access_token,ACCESS_TOKEN_COOKIE
 
 from app.database import get_db
 from app.models.user import User
 from app.schemas.user import UserCreate, UserOut,Token
 from app.core.deps import get_current_user
+from app.core.config import settings
 
 router =APIRouter(prefix="/auth",tags=["auth"])
 
@@ -30,7 +31,7 @@ def register(user_in:UserCreate,db:Session=Depends(get_db)):
     return user
 
 @router.post("/login",response_model=Token)
-def login(form_data:OAuth2PasswordRequestForm=Depends(),db:Session=Depends(get_db)):
+def login(response:Response,form_data:OAuth2PasswordRequestForm=Depends(),db:Session=Depends(get_db)):
     email=form_data.username.lower()
     user=db.scalar(select(User).where(User.email==email))
     if not user or not verify_password(form_data.password,user.hashed_password):
@@ -40,6 +41,17 @@ def login(form_data:OAuth2PasswordRequestForm=Depends(),db:Session=Depends(get_d
             headers={"WWW-Authenticate":"Bearer"},
         )
     access_token=create_access_token(user.id)
+    response.set_cookie(
+        key=ACCESS_TOKEN_COOKIE,
+        value=access_token,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="lax",
+        max_age=settings.access_token_expire_minutes*60,
+        path="/",
+    )
+    
+
     return {"access_token":access_token,"token_type":"bearer"}
 
 

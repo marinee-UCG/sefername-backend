@@ -8,6 +8,7 @@ from app.core.config import settings
 
 
 password_hash=PasswordHash.recommended()
+ACCESS_TOKEN_COOKIE="access_token"
 
 def hash_password(password:str) -> str:
     return password_hash.hash(password)

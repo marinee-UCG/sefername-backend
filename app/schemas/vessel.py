@@ -5,10 +5,10 @@ class VesselCreate(BaseModel):
     imo: str | None = Field(default=None, pattern=r"^\d{7}$")
     vessel_type: str | None = Field(default=None, max_length=50)
     flag: str | None = Field(default=None, max_length=50)
-    dwt: int | None = None
-    gt: int | None = None
+    dwt: int | None = Field(default=None, ge=0)
+    gt: int | None = Field(default=None, ge=0)
     main_engine: str | None = Field(default=None, max_length=100)
-    kw: int | None = None
+    kw: int | None = Field(default=None, ge=0)
 
 class VesselOut(BaseModel):
     model_config=ConfigDict(from_attributes=True)
@@ -28,7 +28,7 @@ class VesselUpdate(BaseModel):
     imo: str | None = Field(default=None, pattern=r"^\d{7}$")
     vessel_type: str | None = Field(default=None, max_length=50)
     flag: str | None = Field(default=None, max_length=50)
-    dwt: int | None = None
-    gt: int | None = None
+    dwt: int | None = Field(default=None, ge=0)
+    gt: int | None = Field(default=None, ge=0)
     main_engine: str | None = Field(default=None, max_length=100)
-    kw: int | None = None
+    kw: int | None = Field(default=None, ge=0)

@@ -33,7 +33,7 @@ def get_identity_document(
     current_user:User=Depends(get_current_user),
     db:Session=Depends(get_db)
 ):
-    query=select(IdentityDocument).where(IdentityDocument.user_id==current_user.id).order_by(IdentityDocument.doc_type,IdentityDocument.expiry_date.desc())
+    query=select(IdentityDocument).where(IdentityDocument.user_id==current_user.id).order_by(IdentityDocument.doc_type,IdentityDocument.expiry_date.desc().nulls_last())
     return db.scalars(query).all()
 
 @router.post("",response_model=IdentityDocumentOut,status_code=status.HTTP_201_CREATED)

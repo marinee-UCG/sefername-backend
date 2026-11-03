@@ -20,12 +20,12 @@ class ContractOut(BaseModel):
     company:str
     rank:str
     start_date:date
-    end_date:date |None = None
+    end_date:date | None
     vessel:VesselOut
 
 class ContractUpdate(BaseModel):
-    company:str=Field(default=None,min_length=1,max_length=100)
-    rank:str=Field(default=None,min_length=1,max_length=50)
+    company:str | None=Field(default=None,min_length=1,max_length=100)
+    rank:str | None=Field(default=None,min_length=1,max_length=50)
     start_date:date |None = None
     end_date:date | None= None
 

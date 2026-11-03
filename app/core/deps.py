@@ -9,7 +9,7 @@ from app.models.user import User
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 credentials_exception = HTTPException(
        status_code=status.HTTP_401_UNAUTHORIZED,
-       detail="Gecersiz kimlik bilgisi",
+       detail="Could not validate credentials",
        headers={"WWW-Authenticate": "Bearer"},
    )
    
