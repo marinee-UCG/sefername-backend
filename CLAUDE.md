@@ -148,7 +148,7 @@ seafarer-panel-backend/
 ### Sıradaki işler (sırayla)
 1. ~~MRZ endpoint'i~~ **bitti:** `POST /identity-documents/{id}/extract` (sırayla: pasaport değil 422, dosya yok 422, dosya diskte yok 404, onaylı 409, `MRZError` 422). `personal_number` (TC kimlik no) **saklanmaz** (veri minimizasyonu). `verified=False` kalır.
 2. **pytest — yarıda bırakıldı, frontend'den sonra dönülecek:** kurulu (`pytest.ini`: `pythonpath = .`, `testpaths = tests`). `tests/test_mrz.py`'de 5 test var (3 kontrol hanesi, `pytest.raises` ile küçük harf, ICAO `parse_td3` sözlük+döngü). Kaldığı yer: 6. adım, OCR hatası testi (`L898`→`LB98`; `checks.document_number` False, `birth_date` True). Sonra endpoint testleri (httpx2 + TestClient).
-3. **Frontend:** palet, tipografi ve hareket kuralları **belirlendi** (bölüm 7, `design/preview.html`). Sıradaki: React + Vite kurulumu, tokenları CSS değişkeni olarak taşımak, backend'de CORS.
+3. **Frontend:** palet, tipografi ve hareket kuralları **belirlendi** (bölüm 7, `design/preview.html`). Kurulum bitti (Vite + React, tokenlar, Manrope, CORS, `/api` proxy, `dev:lan`). Sıradaki: **login sayfası** (`apiRequest('/auth/login', { method: 'POST', form })`; token nerede saklanacağı önce konuşulacak).
 4. Liman cüzdanı çıkarma: yöntem sonra kararlaştırılacak (MRZ yok).
 5. OCR-B modeli ile isim doğruluğu.
 
@@ -307,5 +307,17 @@ alembic revision --autogenerate -m "..."
 alembic upgrade head
 alembic current | alembic heads | alembic check
 git status | git add . | git commit -m "..."
-pip freeze > requirements.txt
+pip freeze | Out-File -Encoding ascii requirements.txt   # ">" PowerShell 5.1'de UTF-16 yazar
 ```
+
+### Frontend (`seafarer-panel-frontend/`, React 19 + Vite 8, düz JavaScript)
+```
+npm run dev        # sadece bu bilgisayar: http://localhost:5173
+npm run dev:lan    # telefondan da: http://<bilgisayarın Wi-Fi IP'si>:5173 — SADECE ev Wi-Fi'ında
+npm install <paket>
+```
+- Backend adresi **tek yerde**: `src/api/client.js` (`apiRequest`). Geliştirmede `/api` → Vite proxy → `http://127.0.0.1:8000` (`vite.config.js`; `/api` öneki silinir). Bu yüzden geliştirmede CORS devreye girmez ve telefon da backend'e Vite üzerinden ulaşır; backend ağa açılmaz.
+- Backend başka portta çalışıyorsa: `$env:BACKEND_URL="http://127.0.0.1:8001"; npm run dev`
+- Yayında: `VITE_API_URL` ile gerçek API adresi verilir; backend'de `cors_origins` (`.env`) o adrese ayarlanır. `["*"]` asla.
+- Font: `@fontsource/manrope` (400/500/600/700, `main.jsx`'te import). Google Fonts linki kullanılmaz (kullanıcı IP'si Google'a gider, GDPR).
+- Tokenlar: `src/index.css` (bölüm 7 ile aynı). Koyu tema şimdilik işletim sistemi ayarını izler.
