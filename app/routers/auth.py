@@ -1,13 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status,Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from datetime import datetime,timezone
 
 from fastapi.security import OAuth2PasswordRequestForm
 from app.core.security import hash_password,verify_password,create_access_token,ACCESS_TOKEN_COOKIE
 
 from app.database import get_db
 from app.models.user import User
-from app.schemas.user import UserCreate, UserOut,UserUpdate,Token
+from app.schemas.user import UserCreate, UserOut,UserUpdate,Token,OnboardingIn
 from app.core.deps import get_current_user
 from app.core.config import settings
 
@@ -83,3 +84,23 @@ def update_me(
 @router.post("/logout",status_code=status.HTTP_204_NO_CONTENT)
 def logout(response:Response):
     response.delete_cookie(key=ACCESS_TOKEN_COOKIE,path="/")
+
+
+@router.post("/onboarding",response_model=UserOut)
+def complete_onboarding(
+    onboarding_in:OnboardingIn,
+    current_user:User=Depends(get_current_user),
+    db:Session=Depends(get_db)
+):
+    if current_user.onboarded_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Onboarding already completed"
+        )
+    onboarding=onboarding_in.model_dump()
+    current_user.onboarded_at=datetime.now(timezone.utc)
+    for key,value in onboarding.items():
+        setattr(current_user,key,value)
+    db.commit()
+    db.refresh(current_user)
+    return current_user

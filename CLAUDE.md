@@ -1,4 +1,5 @@
-# CLAUDE.md — Seafarer Panel (çalışma adı, uygulama ismi henüz belli değil)
+# CLAUDE.md — Sefernâme (uygulama adı, kullanıcı kararı 2026-11-04; repo adları hâlâ seafarer-panel)
+> Logo: "S" şeklinde teal rota çizgisi, iki ucunda mevki halkaları (kalkış: içi dolu halka, varış: boş halka) — "Rota + Mevki". Yazı: italik serif "Sefernâme". Logo dosyası henüz repoda yok.
 
 Bu dosya, bu projede Claude Code ile nasıl çalışacağımızı anlatır. Her oturumun başında oku.
 
@@ -155,8 +156,8 @@ seafarer-panel-backend/
 - `src/pages/OnboardingPage.jsx` şimdilik **yer tutucu** (karşılama + çıkış). Hazır prop'lar: `user`, `onComplete(updatedUser)` (PATCH sonrası çağrılınca App ana sayfayı açar), `onLogout`.
 - Backend: `PATCH /auth/me` ile ad ve rütbe kaydedilir.
 - **Kesin:** ilk soru ad soyad (kayıt formundan kaldırıldı).
-- **Açık sorular (kullanıcıya sor, sonra planla):** (1) hangi adımlar: rütbe, departman (güverte/makine), şu an gemide mi evde mi (gemideyse aktif kontrat ekle), ilk belge (pasaport + MRZ, atlanabilir)? (2) her soru ayrı ekran + üstte ilerleme çubuğu mu, tek form mu? (3) departman/durum için yeni model alanları gerekir mi (gerekirse migration). Rütbe için serbest metin mi, liste mi?
-- Not: tamamlanma işareti şimdilik `full_name`. Onboarding'e zorunlu başka adım eklenirse ayrı bir `onboarded_at` alanı düşünülmeli.
+- **KARARLAR (kullanıcı, 2026-11-04):** her soru ayrı ekran, üstte ilerleme çubuğu. Ekran sırası: (1) ad soyad, (2) departman (güverte/makine), (3) rütbe, (4) şu an gemide mi evde mi, (5) gemideyse "gemiye ne zaman çıktın", evdeyse "gemiden ne zaman indin" (tarih), (6) belge yükleme — **opsiyonel**, atlanabilir.
+- **Önerilen model (kullanıcı onayı bekliyor):** User'a `department` (deck/engine), `at_sea` (bool), `status_since` (date), `onboarded_at` (datetime) eklenir + migration. Tamamlanma işareti `full_name` yerine `onboarded_at` olur (ad 1. ekranda kaydedilse bile kullanıcı ana sayfaya fırlamasın). Cevaplar frontend state'inde toplanır, son zorunlu ekranda tek istekle `POST /auth/onboarding` gönderilir; backend `onboarded_at`'i kendisi koyar (istemci zaman damgası göndermez). Rütbe: departmana göre liste + "Other" (öneri).
 4. Liman cüzdanı çıkarma: yöntem sonra kararlaştırılacak (MRZ yok).
 5. OCR-B modeli ile isim doğruluğu.
 
