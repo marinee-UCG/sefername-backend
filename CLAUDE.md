@@ -123,14 +123,14 @@ seafarer-panel-backend/
 ## 5. Mevcut durum
 
 ### Bitenler
-- Auth: `POST /auth/register`, `POST /auth/login` (OAuth2 form, JWT, 30 dk), `GET /auth/me`
+- Auth: `POST /auth/register` (sadece email + şifre, min 7), `POST /auth/login` (OAuth2 form, JWT 30 dk, httpOnly cookie), `POST /auth/logout`, `GET /auth/me`, `PATCH /auth/me` (`UserUpdate`: full_name, rank; full_name bir kez girilince null yapılamaz → 422)
 - **Contracts** (`/contracts`): tam CRUD. Kurallar: tek aktif kontrat (409), bitiş > başlangıç (422), POST'ta `vessel_id` **veya** yeni `vessel` (tam olarak biri), yeni gemi + kontrat tek transaction, PATCH'te yeniden açma kontrolü. Cevapta iç içe `vessel`.
 - **Vessels** (`/vessels`): `GET` (alfabetik), `PATCH /{id}`. Gemi kontrat üzerinden eklenir.
 - **Certificates** (`/certificates`): tam CRUD; liste bitiş tarihine göre, süresizler sonda (`nulls_last`).
 - **Identity documents** (`/identity-documents`): pasaport + liman cüzdanı tek tablo (`doc_type`). Elle giriş CRUD (`verified=True`), `POST /upload` (multipart, `verified=False`), `GET /{id}/file` (korumalı indirme), DELETE dosyayı da siler.
 
 ### Modeller (özet)
-- **User:** email (unique), hashed_password, full_name, rank?, created_at
+- **User:** email (unique), hashed_password, full_name? (kayıtta boş, onboarding'de dolar; migration `dd9b57159b60`), rank?, created_at
 - **Vessel:** user_id, name, imo?, vessel_type?, flag?, dwt?, gt?, main_engine?, kw?
 - **Contract:** user_id, vessel_id (RESTRICT), company, rank, start_date, end_date? (boş = aktif), `vessel` relationship
 - **Certificate:** user_id, cert_name (150), cert_number, issue_date, expiry_date?, issuing_inst
@@ -148,7 +148,15 @@ seafarer-panel-backend/
 ### Sıradaki işler (sırayla)
 1. ~~MRZ endpoint'i~~ **bitti:** `POST /identity-documents/{id}/extract` (sırayla: pasaport değil 422, dosya yok 422, dosya diskte yok 404, onaylı 409, `MRZError` 422). `personal_number` (TC kimlik no) **saklanmaz** (veri minimizasyonu). `verified=False` kalır.
 2. **pytest — yarıda bırakıldı, frontend'den sonra dönülecek:** kurulu (`pytest.ini`: `pythonpath = .`, `testpaths = tests`). `tests/test_mrz.py`'de 5 test var (3 kontrol hanesi, `pytest.raises` ile küçük harf, ICAO `parse_td3` sözlük+döngü). Kaldığı yer: 6. adım, OCR hatası testi (`L898`→`LB98`; `checks.document_number` False, `birth_date` True). Sonra endpoint testleri (httpx2 + TestClient).
-3. **Frontend:** palet, tipografi ve hareket kuralları **belirlendi** (bölüm 7, `design/preview.html`). Kurulum bitti (Vite + React, tokenlar, Manrope, CORS, `/api` proxy, `dev:lan`). Sıradaki: **login sayfası.** **KARAR (2026-11-03): token httpOnly cookie'de** (localStorage değil; XSS ile çalınamasın). Plan, sırayla: (1) backend `POST /auth/login` token'ı cookie olarak gönderir: `HttpOnly`, `SameSite=Lax`, `Secure` sadece yayında (ayar), `max_age` = token süresi; (2) `get_current_user` önce cookie'yi, yoksa `Authorization` başlığını okur (Swagger ve ileride iOS için); (3) `POST /auth/logout` cookie'yi siler; (4) frontend token'ı hiç görmez, giriş durumu `GET /auth/me` ile anlaşılır (200/401); (5) login sayfası. Backend adımları (1)–(3) **bitti**: login cookie bırakır (gövdede token Swagger için durur), `get_current_user` önce cookie sonra başlık (`auto_error=False`), `POST /auth/logout` 204. Logout token'ı iptal etmez (JWT 30 dk geçerli kalır; çözüm refresh token). Şifre kuralı: min 7 (kullanıcı kararı; 8 önerildi), max 128. **Kaldığımız yer: adım (4)–(5), frontend login sayfası.**
+3. **Frontend:** palet, tipografi ve hareket kuralları **belirlendi** (bölüm 7, `design/preview.html`). Kurulum bitti (Vite + React, tokenlar, Manrope, CORS, `/api` proxy, `dev:lan`). Sıradaki: **login sayfası.** **KARAR (2026-11-03): token httpOnly cookie'de** (localStorage değil; XSS ile çalınamasın). Plan, sırayla: (1) backend `POST /auth/login` token'ı cookie olarak gönderir: `HttpOnly`, `SameSite=Lax`, `Secure` sadece yayında (ayar), `max_age` = token süresi; (2) `get_current_user` önce cookie'yi, yoksa `Authorization` başlığını okur (Swagger ve ileride iOS için); (3) `POST /auth/logout` cookie'yi siler; (4) frontend token'ı hiç görmez, giriş durumu `GET /auth/me` ile anlaşılır (200/401); (5) login sayfası. Backend adımları (1)–(3) **bitti**: login cookie bırakır (gövdede token Swagger için durur), `get_current_user` önce cookie sonra başlık (`auto_error=False`), `POST /auth/logout` 204. Logout token'ı iptal etmez (JWT 30 dk geçerli kalır; çözüm refresh token). Şifre kuralı: min 7 (kullanıcı kararı; 8 önerildi), max 128. Frontend (4)–(5) **bitti**: `LoginPage` (state, `onSubmit`, hata + bekleme durumu, tasarım), `App` kullanıcıyı tutar (`onLogin` prop), açılışta `useEffect` ile `/auth/me` kontrolü (`checking` iken `null` çizer), çıkış butonu. Login arka planı: `components/ChartBackground.jsx` (OSM İstanbul Boğazı kıyı çizgisi, 5′ ızgara, Mercator; veri `scripts/make_chart.py` ile üretilir; `© OpenStreetMap contributors` yazısı lisans gereği kalmalı). Router (react-router 8) kuruldu; `RegisterPage` (email, şifre + şifre tekrarı, frontend'de eşleşme kontrolü). **Kullanıcı kararı: sıradaki iş ONBOARDING, sonra uygulama iskeleti.**
+
+### Onboarding — hazır olan iskelet (2026-11-04)
+- Kural: `full_name` boşsa kullanıcı onboarding'i bitirmemiş sayılır. `App.jsx`'te `needsOnboarding`; `/` → `/onboarding`'e, onboarding bitmişse `/onboarding` → `/`'e yönlendirir. Bilinmeyen adresler → `/`.
+- `src/pages/OnboardingPage.jsx` şimdilik **yer tutucu** (karşılama + çıkış). Hazır prop'lar: `user`, `onComplete(updatedUser)` (PATCH sonrası çağrılınca App ana sayfayı açar), `onLogout`.
+- Backend: `PATCH /auth/me` ile ad ve rütbe kaydedilir.
+- **Kesin:** ilk soru ad soyad (kayıt formundan kaldırıldı).
+- **Açık sorular (kullanıcıya sor, sonra planla):** (1) hangi adımlar: rütbe, departman (güverte/makine), şu an gemide mi evde mi (gemideyse aktif kontrat ekle), ilk belge (pasaport + MRZ, atlanabilir)? (2) her soru ayrı ekran + üstte ilerleme çubuğu mu, tek form mu? (3) departman/durum için yeni model alanları gerekir mi (gerekirse migration). Rütbe için serbest metin mi, liste mi?
+- Not: tamamlanma işareti şimdilik `full_name`. Onboarding'e zorunlu başka adım eklenirse ayrı bir `onboarded_at` alanı düşünülmeli.
 4. Liman cüzdanı çıkarma: yöntem sonra kararlaştırılacak (MRZ yok).
 5. OCR-B modeli ile isim doğruluğu.
 

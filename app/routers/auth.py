@@ -7,7 +7,7 @@ from app.core.security import hash_password,verify_password,create_access_token,
 
 from app.database import get_db
 from app.models.user import User
-from app.schemas.user import UserCreate, UserOut,Token
+from app.schemas.user import UserCreate, UserOut,UserUpdate,Token
 from app.core.deps import get_current_user
 from app.core.config import settings
 
@@ -22,8 +22,6 @@ def register(user_in:UserCreate,db:Session=Depends(get_db)):
     user=User(
         email=email,
         hashed_password=hash_password(user_in.password),
-        full_name=user_in.full_name,
-        rank=user_in.rank,
     )
     db.add(user)
     db.commit()
@@ -57,6 +55,28 @@ def login(response:Response,form_data:OAuth2PasswordRequestForm=Depends(),db:Ses
 
 @router.get("/me",response_model=UserOut)
 def read_me(current_user:User=Depends(get_current_user)):
+    return current_user
+
+
+@router.patch("/me",response_model=UserOut)
+def update_me(
+    user_in:UserUpdate,
+    current_user:User=Depends(get_current_user),
+    db:Session=Depends(get_db),
+):
+    update_data=user_in.model_dump(exclude_unset=True)
+
+    # Once a name is set it cannot be cleared (rank can)
+    if "full_name" in update_data and update_data["full_name"] is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="full_name cannot be null.",
+        )
+
+    for key,value in update_data.items():
+        setattr(current_user,key,value)
+    db.commit()
+    db.refresh(current_user)
     return current_user
 
 
