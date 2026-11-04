@@ -1,5 +1,5 @@
 # CLAUDE.md — Sefernâme (uygulama adı, kullanıcı kararı 2026-11-04; repo adları hâlâ seafarer-panel)
-> Logo: "S" şeklinde teal rota çizgisi, iki ucunda mevki halkaları (kalkış: içi dolu halka, varış: boş halka) — "Rota + Mevki". Yazı: italik serif "Sefernâme". Logo dosyası henüz repoda yok.
+> Logo: "S" şeklinde teal rota çizgisi, iki ucunda mevki halkaları (kalkış: içi dolu halka, varış: boş halka) — "Rota + Mevki". Yazı: "Sefernâme", Manrope 700 (kullanıcı kararı: tek font; serif denendi, istenmedi). Altında isteğe bağlı ince italik slogan: "A voyage, recorded day by day." (Sefernâme = Farsça sefer + nâme, yolculuğun gün gün kaydedildiği kitap). `<Logo tagline />`. Frontend: `components/Logo.jsx` (`Logo` = işaret + yazı, `LogoMark` = sadece işaret, renkler tokenlardan), `public/favicon.svg` (açık/koyu tema), sekme başlığı "Sefernâme".
 
 Bu dosya, bu projede Claude Code ile nasıl çalışacağımızı anlatır. Her oturumun başında oku.
 
@@ -156,7 +156,7 @@ seafarer-panel-backend/
 - `src/pages/OnboardingPage.jsx` şimdilik **yer tutucu** (karşılama + çıkış). Hazır prop'lar: `user`, `onComplete(updatedUser)` (PATCH sonrası çağrılınca App ana sayfayı açar), `onLogout`.
 - Backend: `PATCH /auth/me` ile ad ve rütbe kaydedilir.
 - **Kesin:** ilk soru ad soyad (kayıt formundan kaldırıldı).
-- **KARARLAR (kullanıcı, 2026-11-04):** her soru ayrı ekran, üstte ilerleme çubuğu. Ekran sırası: (1) ad soyad, (2) departman (güverte/makine), (3) rütbe, (4) şu an gemide mi evde mi, (5) gemideyse "gemiye ne zaman çıktın", evdeyse "gemiden ne zaman indin" (tarih), (6) belge yükleme — **opsiyonel**, atlanabilir.
+- **KARARLAR (kullanıcı, 2026-11-04):** her soru ayrı ekran, üstte ilerleme çubuğu. Ekran sırası: (1) ad soyad, (2) departman (güverte/makine), (3) rütbe, (4) şu an gemide mi evde mi, (5) gemideyse "gemiye ne zaman çıktın", evdeyse "gemiden ne zaman indin" (tarih), (6) **profil kartı / özet** — kullanıcı tüm cevapları görür, her satırdan ilgili ekrana dönüp düzeltebilir; "Confirm" ile `POST /auth/onboarding` gider (kullanıcı kararı 2026-11-04), (7) belge yükleme — **opsiyonel**, atlanabilir; bitince/atlanınca `onComplete(user)` ile ana sayfa açılır.
 - **Önerilen model (kullanıcı onayı bekliyor):** User'a `department` (deck/engine), `at_sea` (bool), `status_since` (date), `onboarded_at` (datetime) eklenir + migration. Tamamlanma işareti `full_name` yerine `onboarded_at` olur (ad 1. ekranda kaydedilse bile kullanıcı ana sayfaya fırlamasın). Cevaplar frontend state'inde toplanır, son zorunlu ekranda tek istekle `POST /auth/onboarding` gönderilir; backend `onboarded_at`'i kendisi koyar (istemci zaman damgası göndermez). Rütbe: departmana göre liste + "Other" (öneri).
 4. Liman cüzdanı çıkarma: yöntem sonra kararlaştırılacak (MRZ yok).
 5. OCR-B modeli ile isim doğruluğu.
@@ -232,6 +232,8 @@ Tek vurgu rengi ilkesi: vurgu sadece butonlar, linkler, rotalar, limanlar ve "Ak
 | `--accent-soft` | vurgu %10 | vurgu %14 | ikincil buton, satır hover'ı, "Aktif" rozeti zemini |
 | `--warning` | `#9A5B0E` | `#E3B15A` | süresi yaklaşan, şüpheli OCR alanı |
 | `--danger` | `#A93226` | `#E57A6E` | süresi dolmuş, hata |
+
+**Rütbe apoletleri (`components/Epaulette.jsx`, 2026-11-04):** lacivert apolet + altın şerit; şerit sayısı kıdem (4→1, cadet ince yarım şerit), güverte zabitine elmas, makineye mor ara dolgu, ETO'ya yeşil, ratinglere sadece amblem (güverte elmas, makine pervane). Bu renkler (`--gold`, `--board`, `--board-edge`, `--engine-purple`, `--eto-green`) **sadece apolet içindir**, genel arayüzde kullanılmaz.
 
 **Paylaşım kartları (Voyage, Homebound, Sea Ledger...) henüz tasarlanmadı.** En sona bırakıldı; kullanıcı o aşamada farklı istekler getirecek. `preview.html`'deki 4:5 kart sadece yer tutucu, kural değil.
 
