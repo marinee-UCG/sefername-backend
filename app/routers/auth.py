@@ -58,3 +58,8 @@ def login(response:Response,form_data:OAuth2PasswordRequestForm=Depends(),db:Ses
 @router.get("/me",response_model=UserOut)
 def read_me(current_user:User=Depends(get_current_user)):
     return current_user
+
+
+@router.post("/logout",status_code=status.HTTP_204_NO_CONTENT)
+def logout(response:Response):
+    response.delete_cookie(key=ACCESS_TOKEN_COOKIE,path="/")
