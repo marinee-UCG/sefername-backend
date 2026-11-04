@@ -156,7 +156,17 @@ seafarer-panel-backend/
 - `src/pages/OnboardingPage.jsx` şimdilik **yer tutucu** (karşılama + çıkış). Hazır prop'lar: `user`, `onComplete(updatedUser)` (PATCH sonrası çağrılınca App ana sayfayı açar), `onLogout`.
 - Backend: `PATCH /auth/me` ile ad ve rütbe kaydedilir.
 - **Kesin:** ilk soru ad soyad (kayıt formundan kaldırıldı).
-- **KARARLAR (kullanıcı, 2026-11-04):** her soru ayrı ekran, üstte ilerleme çubuğu. Ekran sırası: (1) ad soyad, (2) departman (güverte/makine), (3) rütbe, (4) şu an gemide mi evde mi, (5) gemideyse "gemiye ne zaman çıktın", evdeyse "gemiden ne zaman indin" (tarih), (6) **profil kartı / özet** — kullanıcı tüm cevapları görür, her satırdan ilgili ekrana dönüp düzeltebilir; "Confirm" ile `POST /auth/onboarding` gider (kullanıcı kararı 2026-11-04), (7) belge yükleme — **opsiyonel**, atlanabilir; bitince/atlanınca `onComplete(user)` ile ana sayfa açılır.
+- **KARARLAR (kullanıcı, 2026-11-04):** her soru ayrı ekran, üstte ilerleme çubuğu. Ekran sırası: (1) ad soyad, (2) departman (güverte/makine), (3) rütbe, (4) şu an gemide mi evde mi, (5) gemideyse "gemiye ne zaman çıktın", evdeyse "gemiden ne zaman indin" (tarih), (6) **profil kartı / özet** — kullanıcı tüm cevapları görür, her satırdan ilgili ekrana dönüp düzeltebilir; "Confirm" ile `POST /auth/onboarding` gider (kullanıcı kararı 2026-11-04), Confirm → `onComplete(user)` → doğrudan dashboard. **Belge yükleme onboarding'den çıkarıldı (2026-11-04), dashboard'dan yapılacak.** Onboarding BİTTİ.
+
+### Seferler (Voyage) + Seyir haritası — KARARLAR (2026-11-04)
+- Sıra: (1) Port modeli + seed migration, (2) Voyage modeli + şemalar + kurallar, (3) `services/routing.py` (searoute; **önce lisansı kontrol et**: kütüphane + deniz yolu ağı verisi), (4) endpoint'ler, (5) pytest, (6) frontend (tasarım: kullanıcı `design/` altına preview.html atacak, frontend'e gelince iste).
+- **EOSP ayrı aksiyon:** `POST /voyages/{id}/eosp` (sadece aktif sefer, iki kez bitirilemez 409, eosp > cosp 422). Düzeltme için PATCH sonra.
+- **Sefer kontrata zorunlu bağlı.** Gemideki kullanıcı önce aktif kontratını ekler (dashboard'da yönlendirme). `user_id` hep token'dan; kontrat kullanıcının değilse 404.
+- **`contract_id` → `ondelete=RESTRICT`** (kontrat silinince seyir defteri gitmesin; seferli kontrat silinmek istenirse 409). `user_id` → CASCADE (hesap silme). Port FK'leri RESTRICT.
+- Bir kontratın seferleri: `GET /voyages?contract_id=5` (ayrı endpoint yok).
+- **Limanlar kendi tablomuzda.** İlk ~40 liman migration içinde Python listesi (migration dış dosya okumaz, deterministik kalsın); tam UN/LOCODE sonra ayrı script ile. UN/LOCODE koordinatları kaba: ilk liste elle doğrulanacak.
+- Zamanlar UTC saklanır (`timezone=True`); formda gemi saati/UTC girişi frontend'de kararlaştırılacak.
+- Mesafe ve rota saklanmaz, liman çiftinden hesaplanır. Güncel konum en yakın dereceye yuvarlanır, `approximate: true`.
 - **Önerilen model (kullanıcı onayı bekliyor):** User'a `department` (deck/engine), `at_sea` (bool), `status_since` (date), `onboarded_at` (datetime) eklenir + migration. Tamamlanma işareti `full_name` yerine `onboarded_at` olur (ad 1. ekranda kaydedilse bile kullanıcı ana sayfaya fırlamasın). Cevaplar frontend state'inde toplanır, son zorunlu ekranda tek istekle `POST /auth/onboarding` gönderilir; backend `onboarded_at`'i kendisi koyar (istemci zaman damgası göndermez). Rütbe: departmana göre liste + "Other" (öneri).
 4. Liman cüzdanı çıkarma: yöntem sonra kararlaştırılacak (MRZ yok).
 5. OCR-B modeli ile isim doğruluğu.
