@@ -57,7 +57,11 @@ def create_contract(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="End date must be after start date.",
         )
-
+    if contract_in.planned_end_date is not None and contract_in.planned_end_date <= contract_in.start_date:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Planned end date must be after start date"
+        )
     if contract_in.end_date is None:
         active_contract = db.scalar(
             select(Contract).where(Contract.user_id == current_user.id, Contract.end_date.is_(None))
@@ -86,6 +90,7 @@ def create_contract(
         end_date=contract_in.end_date,
         vessel_id=vessel.id,
         user_id=current_user.id,
+        planned_end_date=contract_in.planned_end_date
     )
     db.add(contract)
     db.commit()
@@ -123,6 +128,12 @@ def update_contract(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="End date must be after start date.",
+        )
+    new_planned_end=update_data.get("planned_end_date",contract.planned_end_date)
+    if new_planned_end is not None and new_planned_end <= new_start:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Planned end date must be after start date",
         )
 
     # Açık 2: bitmiş kontrat yeniden açılıyorsa başka aktif kontrat olmasın

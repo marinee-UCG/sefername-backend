@@ -21,4 +21,5 @@ class Contract(Base):
     rank:Mapped[str]=mapped_column(String(50))
     start_date:Mapped[date]
     end_date:Mapped[date | None]
+    planned_end_date:Mapped[date |None]
     vessel:Mapped["Vessel"]=relationship()

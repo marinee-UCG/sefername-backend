@@ -10,6 +10,7 @@ class ContractCreate(BaseModel):
     rank:str=Field(min_length=1,max_length=50)
     start_date:date
     end_date:date | None= None
+    planned_end_date:date |None = None
     vessel_id:int |None = None
     vessel:VesselCreate | None = None
 
@@ -22,12 +23,14 @@ class ContractOut(BaseModel):
     start_date:date
     end_date:date | None
     vessel:VesselOut
+    planned_end_date:date | None
 
 class ContractUpdate(BaseModel):
     company:str | None=Field(default=None,min_length=1,max_length=100)
     rank:str | None=Field(default=None,min_length=1,max_length=50)
     start_date:date |None = None
     end_date:date | None= None
+    planned_end_date:date |None = None
 
 
 
