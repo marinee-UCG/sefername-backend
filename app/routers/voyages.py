@@ -155,6 +155,14 @@ def list_voyages(
 
     return [voyage_out(v) for v in voyages]
 
+@router.delete("/{voyage_id}",status_code=status.HTTP_204_NO_CONTENT)
+def delete_voyage_by_id(
+    voyage:Voyage=Depends(get_user_voyage_or_404),
+    db:Session=Depends(get_db)
+):
+    db.delete(voyage)
+    db.commit()
+
 
     
 

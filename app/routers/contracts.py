@@ -8,6 +8,7 @@ from app.database import get_db
 from app.models.contract import Contract
 from app.models.user import User
 from app.models.vessel import Vessel
+from app.models.voyage import Voyage
 from app.schemas.contract import ContractCreate,ContractOut,ContractUpdate
 
 
@@ -102,6 +103,14 @@ def get_contract_by_id(contract:Contract=Depends(get_user_contract_or_404)):
     return contract
 @router.delete("/{contract_id}",status_code=status.HTTP_204_NO_CONTENT)
 def delete_contract_by_id(contract:Contract=Depends(get_user_contract_or_404),db:Session=Depends(get_db)):
+    has_voyages=db.scalar(
+        select(Voyage.id).where(Voyage.contract_id==contract.id).limit(1)
+    )
+    if has_voyages is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This contract has voyages.Delete them first"
+        )
     db.delete(contract)
     db.commit()
 
