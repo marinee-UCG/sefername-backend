@@ -40,4 +40,11 @@ class Voyage(Base):
     contract:Mapped["Contract"]=relationship()
     from_port:Mapped["Port"]=relationship(foreign_keys=[from_port_id])
     to_port:Mapped["Port"]=relationship(foreign_keys=[to_port_id])
+    @property
+    def is_active(self)-> bool:
+        return self.eosp_at is None
+    
+    @property
+    def vessel_name(self) -> str:
+        return self.contract.vessel.name
 
