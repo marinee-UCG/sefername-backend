@@ -1,6 +1,6 @@
 from fastapi import APIRouter,Depends,Query
 
-from sqlalchemy import select,or_
+from sqlalchemy import select,or_,case
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
@@ -17,6 +17,11 @@ def search_ports(
     current_user:User=Depends(get_current_user),
     db:Session=Depends(get_db)
 ):
+    match_rank=case(
+        (Port.locode.ilike(q),0),
+        (Port.name.ilike(f"{q}%"),1),
+        else_=2
+    )
     query=(
         select(Port)
         .where(or_(
@@ -24,7 +29,7 @@ def search_ports(
             Port.locode.ilike(f"{q}%")
             
         ))
-        .order_by(Port.name)
+        .order_by(match_rank,Port.name)
         .limit(15)
     )
     return db.scalars(query).all()

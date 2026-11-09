@@ -31,6 +31,7 @@ class IdentityDocumentOut(BaseModel):
     expiry_date: date | None
     extracted_data: dict | None
     verified: bool
+    has_file:bool
     created_at: datetime
 
 

@@ -21,3 +21,6 @@ class IdentityDocument(Base):
     extracted_data:Mapped[dict |None]=mapped_column(JSONB)
     verified:Mapped[bool]=mapped_column(default=False,server_default=false())
     created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),server_default=func.now())
+    @property
+    def has_file(self) -> bool:
+        return self.file_path is not None
