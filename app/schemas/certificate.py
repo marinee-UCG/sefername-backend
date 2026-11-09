@@ -19,6 +19,7 @@ class CertificateOut(BaseModel):
     issue_date:date
     expiry_date:date |None 
     issuing_inst:str
+    has_file:bool
 
 class CertificateUpdate(BaseModel):
 

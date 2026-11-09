@@ -1,6 +1,11 @@
-from fastapi import APIRouter,Depends,HTTPException,status
+from fastapi import APIRouter,Depends,HTTPException,status,File,UploadFile
+from fastapi.responses import FileResponse
+from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+
+from app.core.config import settings
+from app.core.storage import FileTooLargeError,UnsupportedFileTypeError,save_upload,delete_file
 
 from app.core.deps import get_current_user
 from app.database import get_db
@@ -40,8 +45,11 @@ def get_certificate_by_id(certificate:Certificate=Depends(get_user_certificate_o
 
 @router.delete("/{certificate_id}",status_code=status.HTTP_204_NO_CONTENT)
 def delete_certificate_by_id(certificate:Certificate=Depends(get_user_certificate_or_404),db:Session=Depends(get_db)):
+    file_path=certificate.file_path
     db.delete(certificate)
     db.commit()
+    if file_path is not None:
+        delete_file(file_path)
 
 
 @router.post("",response_model=CertificateOut,status_code=status.HTTP_201_CREATED)
@@ -97,6 +105,65 @@ def update_certificate(
     return certificate
 
 
+@router.post("/{certificate_id}/file",response_model=CertificateOut)
+def upload_certificate_file(
+    file:UploadFile=File(...),
+    certificate:Certificate=Depends(get_user_certificate_or_404),
+    db:Session=Depends(get_db)
+):
+    try:
+        new_path=save_upload(file,certificate.user_id)
+    except FileTooLargeError:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f"File is too large.Max size is {settings.max_upload_size_mb} mB"
+        )
+    except UnsupportedFileTypeError:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Unsupported file type.Only PDF,JPG and PNG are allowed"
+        )
+    old_path=certificate.file_path
+    certificate.file_path=new_path
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        delete_file(new_path)
+        raise
+    if old_path is not None:
+        delete_file(old_path)
+    db.refresh(certificate)
+    return certificate
+
+MEDIA_TYPES = {
+    ".pdf": "application/pdf",
+    ".jpg": "image/jpeg",
+    ".png": "image/png",
+}
+@router.get("/{certificate_id}/file")
+def download_certificate_file(
+        certificate:Certificate=Depends(get_user_certificate_or_404),
+       
+):
+    if certificate.file_path is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This certificate has no file.",
+        )
+
+    path = Path(certificate.file_path)
+    if not path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File not found.",
+        )
+
+    return FileResponse(
+        path,
+        media_type=MEDIA_TYPES.get(path.suffix, "application/octet-stream"),
+        filename=f"certificate{path.suffix}",
+    )
 
 
 

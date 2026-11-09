@@ -14,3 +14,7 @@ class Certificate(Base):
     issue_date:Mapped[date]
     expiry_date:Mapped[date | None]
     issuing_inst:Mapped[str]=mapped_column(String(100))
+    file_path:Mapped[str | None]=mapped_column(String(255))
+    @property
+    def has_file(self) ->bool:
+        return self.file_path is not None
