@@ -4,7 +4,7 @@ from app.core.config import settings
 
 
 
-from app.routers import auth,contracts,vessels,identity_document,certificates,ports,voyages
+from app.routers import auth,contracts,vessels,identity_document,certificates,ports,voyages,sea_map
 
 
 
@@ -23,3 +23,4 @@ app.include_router(identity_document.router)
 app.include_router(certificates.router)
 app.include_router(ports.router)
 app.include_router(voyages.router)
+app.include_router(sea_map.router)
