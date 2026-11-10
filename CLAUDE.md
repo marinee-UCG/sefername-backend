@@ -201,7 +201,7 @@ seafarer-panel-backend/
 - Refresh token
 - Login deneme sınırı **eklendi (2026-11-10)**: `core/rate_limit.py`, bellekte (aynı email+adres 15 dk'da 5, aynı adres 20 hatalı → 429 + Retry-After). Çoklu worker'da Redis'e taşınmalı; proxy arkasında uvicorn `--proxy-headers` gerekir. Bilinmeyen email de sahte hash ile doğrulanır (süre farkı hesap varlığını ele vermesin).
 - Pasaport onaylanınca `extracted_data` silinir (2026-11-10). Daha önce onaylanmış kayıtlarda eski veri duruyor olabilir (tek seferlik temizlik kullanıcı onayıyla).
-- `PATCH /contracts/{id}` bitiş tarihini içindeki seferlerin EOSP'sinden önceye çekebiliyor (demo veride bir örnek var: sefer 20) → kontrol eklenmeli
+- `PATCH /contracts/{id}` artık seferleri dışarıda bırakamaz (2026-11-10): sign-on ilk COSP'tan sonra olamaz, sign-off son EOSP'tan önce olamaz (422), yolda sefer varken sign-off 409. Sadece gerçekten değişen tarih kontrol edilir. Demo veride bu kuraldan önce oluşmuş bir örnek var (sefer 20, kontrat 15): düzeltmek kullanıcı onayı bekliyor.
 - Dosyaların ve hassas alanların şifrelenmesi
 - Otomatik testler: sadece `mrz.py` için başladı; endpoint'ler hâlâ Swagger'da elle test ediliyor
 - `requirements.txt` güncellerken `>` kullanma (PowerShell 5.1 UTF-16 yazar): `pip freeze | Out-File -Encoding ascii requirements.txt`

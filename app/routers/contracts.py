@@ -145,6 +145,32 @@ def update_contract(
             detail="Planned end date must be after start date",
         )
 
+    # The contract must still hold its voyages: none before sign-on, none after sign-off.
+    # Checked only for dates that really change, so fixing the company name never trips on them.
+    start_changed=new_start!=contract.start_date
+    end_changed=new_end!=contract.end_date
+    if start_changed or end_changed:
+        voyages=db.scalars(select(Voyage).where(Voyage.contract_id==contract.id)).all()
+        if voyages:
+            first_cosp=min(v.cosp_at for v in voyages)
+            if start_changed and first_cosp.date()<new_start:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail=f"Sign-on cannot be after your first voyage (COSP {first_cosp.date().isoformat()}).",
+                )
+            if end_changed and new_end is not None:
+                if any(v.eosp_at is None for v in voyages):
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="A voyage is still under way. Give EOSP before signing off.",
+                    )
+                last_eosp=max(v.eosp_at for v in voyages)
+                if last_eosp.date()>new_end:
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                        detail=f"Sign-off cannot be before your last voyage ended (EOSP {last_eosp.date().isoformat()}).",
+                    )
+
     # Açık 2: bitmiş kontrat yeniden açılıyorsa başka aktif kontrat olmasın
     reopening = (
         "end_date" in update_data
