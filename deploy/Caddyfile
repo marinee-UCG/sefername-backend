@@ -1,6 +1,9 @@
 # Caddy gets and renews the HTTPS certificate for {$DOMAIN} by itself (Let's Encrypt).
 {
 	email {$ACME_EMAIL}
+	# Browsers send no server name (SNI) when the address is an IP, e.g. a phone on the home
+	# Wi-Fi opening https://192.168.x.x; this tells Caddy which certificate to use then
+	default_sni {$DOMAIN}
 }
 
 {$DOMAIN} {
