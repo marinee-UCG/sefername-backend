@@ -3,7 +3,7 @@ from datetime import date,datetime
 
 from pydantic import BaseModel,ConfigDict,Field
 
-DocType=Literal["passport","seaman_book"]
+DocType=Literal["passport","seaman_book","medical"]
 
 
 class IdentityDocumentCreate(BaseModel):
