@@ -9,6 +9,8 @@ from app.core.config import settings
 
 password_hash=PasswordHash.recommended()
 ACCESS_TOKEN_COOKIE="access_token"
+# Checked against when the email has no account, so both cases take the same time
+DUMMY_PASSWORD_HASH=password_hash.hash("not-a-real-password")
 
 def hash_password(password:str) -> str:
     return password_hash.hash(password)

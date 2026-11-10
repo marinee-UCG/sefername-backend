@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status,Response
+from fastapi import APIRouter, Depends, HTTPException, status,Response,Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from datetime import date,datetime,timedelta,timezone
 
 from fastapi.security import OAuth2PasswordRequestForm
-from app.core.security import hash_password,verify_password,create_access_token,ACCESS_TOKEN_COOKIE
+from app.core.security import hash_password,verify_password,create_access_token,ACCESS_TOKEN_COOKIE,DUMMY_PASSWORD_HASH
+from app.core.rate_limit import login_throttle,MAX_FAILURES_PER_ACCOUNT,MAX_FAILURES_PER_ADDRESS
 
 from app.database import get_db
 from app.models.user import User
@@ -30,15 +31,39 @@ def register(user_in:UserCreate,db:Session=Depends(get_db)):
     return user
 
 @router.post("/login",response_model=Token)
-def login(response:Response,form_data:OAuth2PasswordRequestForm=Depends(),db:Session=Depends(get_db)):
+def login(request:Request,response:Response,form_data:OAuth2PasswordRequestForm=Depends(),db:Session=Depends(get_db)):
     email=form_data.username.lower()
+    # Behind a proxy this is the proxy's address unless uvicorn runs with --proxy-headers
+    address=request.client.host if request.client else "unknown"
+    account_key=f"account:{email}|{address}"
+    address_key=f"address:{address}"
+
+    # Checked before the password: a locked door does not even look at the key
+    wait=max(
+        login_throttle.retry_after(account_key,MAX_FAILURES_PER_ACCOUNT),
+        login_throttle.retry_after(address_key,MAX_FAILURES_PER_ADDRESS),
+    )
+    if wait:
+        minutes=max(1,round(wait/60))
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many sign-in attempts. Try again in {minutes} minute{'s' if minutes>1 else ''}.",
+            headers={"Retry-After":str(wait)},
+        )
+
     user=db.scalar(select(User).where(User.email==email))
-    if not user or not verify_password(form_data.password,user.hashed_password):
+    # Always verify against some hash, so an unknown email takes as long as a wrong password
+    # (otherwise the response time tells which emails have an account)
+    password_ok=verify_password(form_data.password,user.hashed_password if user else DUMMY_PASSWORD_HASH)
+    if not user or not password_ok:
+        login_throttle.record_failure(account_key)
+        login_throttle.record_failure(address_key)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Wrong email or password",
             headers={"WWW-Authenticate":"Bearer"},
         )
+    login_throttle.reset(account_key)
     access_token=create_access_token(user.id)
     response.set_cookie(
         key=ACCESS_TOKEN_COOKIE,
