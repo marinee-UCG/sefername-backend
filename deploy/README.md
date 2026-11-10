@@ -77,10 +77,14 @@ Tarayıcıda `https://<domain>` → kayıt ol → kullan.
 
 `backup` container'ı her gece `deploy/backups/sefername-YYYY-MM-DD.dump` yazar, son 14'ü tutar. **Bu yalnız yanlışlıklara karşı korur; sunucu giderse yedek de gider.** Klasörü sunucu dışına da kopyala (ör. `rclone` ile Backblaze B2 / Cloudflare R2, ayda birkaç kuruş).
 
-Geri yükleme (bunu **bir kez dene**, denenmemiş yedek yedek değildir):
+Geri yükleme (bunu **bir kez dene**, denenmemiş yedek yedek değildir). Önce dosyanın **boyutuna ve tarihine** bak: veritabanı boşken alınmış bir döküm her şeyi boşaltır.
 ```bash
-docker compose exec -T db pg_restore --clean --if-exists -U sefername -d sefername < backups/sefername-2026-11-10.dump
+ls -lh backups/                                  # hangi döküm, ne zaman, ne büyüklükte?
+docker compose stop api                          # geri yüklerken kimse yazmasın
+docker compose exec backup pg_restore --clean --if-exists -d sefername /backups/sefername-2026-11-10.dump
+docker compose start api
 ```
+Dosya zaten `backup` container'ının içinde (`/backups`), bağlantı bilgileri de orada tanımlı; bu yüzden `<` yönlendirmesi gerekmez ve komut PowerShell'de de çalışır. Elle döküm almak için: `docker compose exec backup pg_dump --format=custom --file=/backups/elle.dump`.
 Yüklenen dosyalar (`uploads` volume) dökümde yok; onları da yedekle:
 ```bash
 docker run --rm -v sefername_uploads:/u -v "$PWD/backups":/b alpine tar czf /b/uploads-$(date +%F).tgz -C /u .
@@ -93,7 +97,7 @@ cd ~/sefername/seafarer-panel-frontend && git pull
 cd ~/sefername/seafarer-panel-backend && git pull
 cd deploy && docker compose up -d --build   # migrate yeni şemayı kendisi uygular
 ```
-Büyük bir migration'dan önce elle bir döküm al: `docker compose exec backup pg_dump -Fc -f /backups/elle-$(date +%F).dump`.
+Büyük bir migration'dan önce elle bir döküm al: `docker compose exec backup pg_dump --format=custom --file=/backups/elle.dump`.
 
 ## Güvenlik notları
 
