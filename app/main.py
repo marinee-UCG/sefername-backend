@@ -4,7 +4,7 @@ from app.core.config import settings
 
 
 
-from app.routers import auth,contracts,vessels,identity_document,certificates,ports,voyages,sea_map
+from app.routers import account,auth,contracts,vessels,identity_document,certificates,ports,voyages,sea_map
 
 
 
@@ -17,6 +17,7 @@ app.add_middleware(
     allow_headers=["Authorization","Content-Type"],
 )
 app.include_router(auth.router)
+app.include_router(account.router)
 app.include_router(contracts.router)
 app.include_router(vessels.router)
 app.include_router(identity_document.router)

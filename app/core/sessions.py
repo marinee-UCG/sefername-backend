@@ -92,6 +92,14 @@ def refresh_session(response: Response, db: Session, raw_token: str | None) -> i
     return row.user_id
 
 
+def is_persistent(db: Session, raw_token: str | None) -> bool:
+    """Whether this device chose "keep me signed in" (true when it cannot tell)."""
+    if not raw_token:
+        return True
+    row = db.scalar(select(RefreshToken).where(RefreshToken.token_hash == _hash(raw_token)))
+    return row.persistent if row else True
+
+
 def end_session(response: Response, db: Session, raw_token: str | None) -> None:
     """Signs out this device: its refresh token stops working and both cookies go."""
     if raw_token:

@@ -125,6 +125,7 @@ seafarer-panel-backend/
 
 ### Bitenler
 - Auth: `POST /auth/register` (sadece email + şifre, min 7), `POST /auth/login` (OAuth2 form, JWT 30 dk, httpOnly cookie), `POST /auth/logout`, `GET /auth/me`, `PATCH /auth/me` (`UserUpdate`: full_name, rank; full_name bir kez girilince null yapılamaz → 422); `home_timezone` (2026-11-10, migration `efd3e2f18975`): IANA adı, `zoneinfo.available_timezones()` dışındaki değer 422, null ile silinir. Gemide telefon gemi saatini tuttuğu için evin saati burada saklanır (frontend üst bardaki ev saati)
+- **Account** (`/account`, 2026-11-10): `POST /password` (mevcut şifre + yeni min 7; yanlışsa 400, 5 hatada 429; diğer cihazların oturumları kapanır, bu cihaz devam eder), `GET /export` (JSON indirme: profil, kontratlar, seferler, sertifikalar, belgeler; dosyalar ve `file_path`/`user_id`/hash yok), `POST /delete` (şifre tekrar istenir; DB cascade + `uploads/<user_id>/` silinir, cookie'ler temizlenir). App Store 5.1.1(v) ve KVKK için.
 - **Contracts** (`/contracts`): tam CRUD. Kurallar: tek aktif kontrat (409), bitiş > başlangıç (422), POST'ta `vessel_id` **veya** yeni `vessel` (tam olarak biri), yeni gemi + kontrat tek transaction, PATCH'te yeniden açma kontrolü. Cevapta iç içe `vessel`.
 - **Vessels** (`/vessels`): `GET` (alfabetik), `PATCH /{id}`. Gemi kontrat üzerinden eklenir.
 - **Certificates** (`/certificates`): tam CRUD; liste bitiş tarihine göre, süresizler sonda (`nulls_last`).
@@ -197,7 +198,7 @@ seafarer-panel-backend/
 5. OCR-B modeli ile isim doğruluğu.
 
 ### Bilinen açıklar / yapılacaklar
-- Kullanıcı silinince `uploads/<user_id>/` temizlenmeli (kullanıcı silme endpoint'i eklendiğinde)
+- Kullanıcı silinince `uploads/<user_id>/` temizleniyor (`POST /account/delete`, 2026-11-10)
 - Refresh token **eklendi (2026-11-10)**: `models/refresh_token.py` (migration `49279e6589a0`), `core/sessions.py`. Token'ın sadece SHA-256'sı saklanır; her `POST /auth/refresh` token'ı değiştirir (rotation), kullanılmış token geri gelirse kullanıcının bütün oturumları kapanır. Login'de `remember` (varsayılan true): 30 gün kalıcı cookie, false ise tarayıcı oturumu + 1 gün. Logout refresh token'ı iptal eder (access JWT 30 dk geçerli kalır). Frontend 401'de bir kez yenileyip isteği tekrarlar.
 - Login deneme sınırı **eklendi (2026-11-10)**: `core/rate_limit.py`, bellekte (aynı email+adres 15 dk'da 5, aynı adres 20 hatalı → 429 + Retry-After). Çoklu worker'da Redis'e taşınmalı; proxy arkasında uvicorn `--proxy-headers` gerekir. Bilinmeyen email de sahte hash ile doğrulanır (süre farkı hesap varlığını ele vermesin).
 - Pasaport onaylanınca `extracted_data` silinir (2026-11-10). Daha önce onaylanmış kayıtlarda eski veri duruyor olabilir (tek seferlik temizlik kullanıcı onayıyla).
