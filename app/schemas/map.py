@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import AwareDatetime,BaseModel
 
 from app.schemas.port import PortOut
 from app.schemas.voyage import VoyageOut
@@ -12,7 +12,10 @@ class MapPosition(BaseModel):
 
     lat:float
     lon:float
+    progress:int
+    eta:AwareDatetime
     approximate:bool=True
+   
 
 class MapTotals(BaseModel):
 

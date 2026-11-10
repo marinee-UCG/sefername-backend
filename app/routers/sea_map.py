@@ -1,4 +1,4 @@
-from datetime import datetime,timezone
+from datetime import datetime,timedelta,timezone
 
 from fastapi import APIRouter,Depends
 from sqlalchemy import select
@@ -22,7 +22,13 @@ def approximate_position(voyage:Voyage,route:SeaRoute) -> MapPosition:
     lon,lat=point_along_route(route.coordinates,fraction)
 
 
-    return MapPosition(lat=round(lat),lon=round(lon))
+    return MapPosition(
+        lat=round(lat),
+        lon=round(lon),
+        progress=round(fraction*100),
+        eta=voyage.cosp_at+timedelta(hours=expected_hours),
+    )
+
 
 @router.get("",response_model=MapOut)
 def get_map(
