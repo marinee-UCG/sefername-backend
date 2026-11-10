@@ -1,5 +1,7 @@
+from datetime import date
+
 from fastapi import APIRouter,Depends,HTTPException,status
-from sqlalchemy import select
+from sqlalchemy import or_,select
 from sqlalchemy.orm import Session
 
 
@@ -29,6 +31,25 @@ def get_user_contract_or_404(
     return selected_contract
 
 
+
+
+def check_no_overlap(db:Session,user_id:int,start:date,end:date | None,exclude_id:int | None=None) -> None:
+    """One person, one ship at a time. Touching is fine: signing off one ship and
+    joining the next on the same day is a normal handover."""
+    query=select(Contract).where(
+        Contract.user_id==user_id,
+        Contract.start_date<(end or date.max),
+        or_(Contract.end_date.is_(None),Contract.end_date>start),
+    )
+    if exclude_id is not None:
+        query=query.where(Contract.id!=exclude_id)
+    other=db.scalars(query.order_by(Contract.start_date)).first()
+    if other is not None:
+        until=other.end_date.isoformat() if other.end_date else "now"
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"These dates overlap your contract on {other.vessel.name} ({other.start_date.isoformat()} to {until}).",
+        )
 
 
 @router.get("",response_model=list[ContractOut])
@@ -72,6 +93,8 @@ def create_contract(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="You already have an active contract. Please complete it first.",
             )
+
+    check_no_overlap(db,current_user.id,contract_in.start_date,contract_in.end_date)
 
     if contract_in.vessel_id is not None:
         vessel = db.scalar(
@@ -145,10 +168,13 @@ def update_contract(
             detail="Planned end date must be after start date",
         )
 
-    # The contract must still hold its voyages: none before sign-on, none after sign-off.
-    # Checked only for dates that really change, so fixing the company name never trips on them.
+    # Checked only for dates that really change, so fixing the company name never trips on old data
     start_changed=new_start!=contract.start_date
     end_changed=new_end!=contract.end_date
+    if start_changed or end_changed:
+        check_no_overlap(db,contract.user_id,new_start,new_end,exclude_id=contract.id)
+
+    # The contract must still hold its voyages: none before sign-on, none after sign-off
     if start_changed or end_changed:
         voyages=db.scalars(select(Voyage).where(Voyage.contract_id==contract.id)).all()
         if voyages:

@@ -203,7 +203,7 @@ seafarer-panel-backend/
 - Login deneme sınırı **eklendi (2026-11-10)**: `core/rate_limit.py`, bellekte (aynı email+adres 15 dk'da 5, aynı adres 20 hatalı → 429 + Retry-After). Çoklu worker'da Redis'e taşınmalı; proxy arkasında uvicorn `--proxy-headers` gerekir. Bilinmeyen email de sahte hash ile doğrulanır (süre farkı hesap varlığını ele vermesin).
 - Pasaport onaylanınca `extracted_data` silinir (2026-11-10); önceden onaylanmış kayıtlar da tek seferlik temizlendi. Demo'daki "Medical Certificate" sertifikası Documents'a (`doc_type=medical`) taşındı.
 - `PATCH /contracts/{id}` artık seferleri dışarıda bırakamaz (2026-11-10): sign-on ilk COSP'tan sonra olamaz, sign-off son EOSP'tan önce olamaz (422), yolda sefer varken sign-off 409. Sadece gerçekten değişen tarih kontrol edilir. Demo verideki çakışma kullanıcı onayıyla düzeltildi (2026-11-10): kontrat 8 sign-off 2026-09-03, sefer 20 25 Ağu–1 Eyl.
-- **Açık:** kontratların birbiriyle çakışması backend'de engellenmiyor (POST/PATCH `/contracts`): iki kontrat aynı günleri kapsayabiliyor → kontrol eklenmeli.
+- Kontratlar birbiriyle çakışamaz (2026-11-10, `check_no_overlap`): POST ve tarihi değişen PATCH'te 409. Aynı gün sign-off/sign-on (gemi değiştirme) serbest.
 - Dosyaların ve hassas alanların şifrelenmesi
 - Otomatik testler: sadece `mrz.py` için başladı; endpoint'ler hâlâ Swagger'da elle test ediliyor
 - `requirements.txt` güncellerken `>` kullanma (PowerShell 5.1 UTF-16 yazar): `pip freeze | Out-File -Encoding ascii requirements.txt`
