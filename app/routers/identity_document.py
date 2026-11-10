@@ -102,6 +102,12 @@ def update_identity_document(
 
     for key, value in update_data.items():
         setattr(document, key, value)
+
+    # Data minimisation: once the user confirms, the raw MRZ read (name, birth date,
+    # nationality...) has done its job; only the confirmed fields stay
+    if update_data.get("verified") is True:
+        document.extracted_data = None
+
     db.commit()
     db.refresh(document)
     return document
