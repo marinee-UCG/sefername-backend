@@ -5,6 +5,9 @@ class Settings(BaseSettings):
     secret_key:str
     algorithm:str="HS256"
     access_token_expire_minutes:int = 30
+    # Refresh token: 30 days with "keep me signed in", otherwise one day (and the browser session)
+    refresh_token_expire_days:int = 30
+    session_refresh_expire_days:int = 1
     upload_dir:str="uploads"
     max_upload_size_mb:int=10
     cors_origins:list[str]=["http://localhost:5173"]

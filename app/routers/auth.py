@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status,Response,Request
+from fastapi import APIRouter, Depends, Form, HTTPException, status,Response,Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from datetime import date,datetime,timedelta,timezone
@@ -6,6 +6,7 @@ from datetime import date,datetime,timedelta,timezone
 from fastapi.security import OAuth2PasswordRequestForm
 from app.core.security import hash_password,verify_password,create_access_token,ACCESS_TOKEN_COOKIE,DUMMY_PASSWORD_HASH
 from app.core.rate_limit import login_throttle,MAX_FAILURES_PER_ACCOUNT,MAX_FAILURES_PER_ADDRESS
+from app.core.sessions import REFRESH_TOKEN_COOKIE,SessionError,clear_cookies,end_session,refresh_session,start_session
 
 from app.database import get_db
 from app.models.user import User
@@ -31,7 +32,13 @@ def register(user_in:UserCreate,db:Session=Depends(get_db)):
     return user
 
 @router.post("/login",response_model=Token)
-def login(request:Request,response:Response,form_data:OAuth2PasswordRequestForm=Depends(),db:Session=Depends(get_db)):
+def login(
+    request:Request,
+    response:Response,
+    form_data:OAuth2PasswordRequestForm=Depends(),
+    remember:bool=Form(True),
+    db:Session=Depends(get_db),
+):
     email=form_data.username.lower()
     # Behind a proxy this is the proxy's address unless uvicorn runs with --proxy-headers
     address=request.client.host if request.client else "unknown"
@@ -64,19 +71,22 @@ def login(request:Request,response:Response,form_data:OAuth2PasswordRequestForm=
             headers={"WWW-Authenticate":"Bearer"},
         )
     login_throttle.reset(account_key)
-    access_token=create_access_token(user.id)
-    response.set_cookie(
-        key=ACCESS_TOKEN_COOKIE,
-        value=access_token,
-        httponly=True,
-        secure=settings.cookie_secure,
-        samesite="lax",
-        max_age=settings.access_token_expire_minutes*60,
-        path="/",
-    )
-    
+    start_session(response,db,user.id,persistent=remember)
+    # The body keeps a token for Swagger's Authorize button; the app itself only uses the cookies
+    return {"access_token":create_access_token(user.id),"token_type":"bearer"}
 
-    return {"access_token":access_token,"token_type":"bearer"}
+
+@router.post("/refresh",status_code=status.HTTP_204_NO_CONTENT)
+def refresh(request:Request,response:Response,db:Session=Depends(get_db)):
+    try:
+        refresh_session(response,db,request.cookies.get(REFRESH_TOKEN_COOKIE))
+    except SessionError:
+        # The response that says "sign in again" also takes the dead cookies away
+        failed=Response(status_code=status.HTTP_401_UNAUTHORIZED)
+        clear_cookies(failed)
+        return failed
+    response.status_code=status.HTTP_204_NO_CONTENT
+    return response
 
 
 @router.get("/me",response_model=UserOut)
@@ -115,8 +125,9 @@ def update_me(
 
 
 @router.post("/logout",status_code=status.HTTP_204_NO_CONTENT)
-def logout(response:Response):
-    response.delete_cookie(key=ACCESS_TOKEN_COOKIE,path="/")
+def logout(request:Request,response:Response,db:Session=Depends(get_db)):
+    # Unlike the access token, the refresh token really stops working here
+    end_session(response,db,request.cookies.get(REFRESH_TOKEN_COOKIE))
 
 
 @router.post("/onboarding",response_model=UserOut)

@@ -198,7 +198,7 @@ seafarer-panel-backend/
 
 ### Bilinen açıklar / yapılacaklar
 - Kullanıcı silinince `uploads/<user_id>/` temizlenmeli (kullanıcı silme endpoint'i eklendiğinde)
-- Refresh token
+- Refresh token **eklendi (2026-11-10)**: `models/refresh_token.py` (migration `49279e6589a0`), `core/sessions.py`. Token'ın sadece SHA-256'sı saklanır; her `POST /auth/refresh` token'ı değiştirir (rotation), kullanılmış token geri gelirse kullanıcının bütün oturumları kapanır. Login'de `remember` (varsayılan true): 30 gün kalıcı cookie, false ise tarayıcı oturumu + 1 gün. Logout refresh token'ı iptal eder (access JWT 30 dk geçerli kalır). Frontend 401'de bir kez yenileyip isteği tekrarlar.
 - Login deneme sınırı **eklendi (2026-11-10)**: `core/rate_limit.py`, bellekte (aynı email+adres 15 dk'da 5, aynı adres 20 hatalı → 429 + Retry-After). Çoklu worker'da Redis'e taşınmalı; proxy arkasında uvicorn `--proxy-headers` gerekir. Bilinmeyen email de sahte hash ile doğrulanır (süre farkı hesap varlığını ele vermesin).
 - Pasaport onaylanınca `extracted_data` silinir (2026-11-10). Daha önce onaylanmış kayıtlarda eski veri duruyor olabilir (tek seferlik temizlik kullanıcı onayıyla).
 - `PATCH /contracts/{id}` artık seferleri dışarıda bırakamaz (2026-11-10): sign-on ilk COSP'tan sonra olamaz, sign-off son EOSP'tan önce olamaz (422), yolda sefer varken sign-off 409. Sadece gerçekten değişen tarih kontrol edilir. Demo veride bu kuraldan önce oluşmuş bir örnek var (sefer 20, kontrat 15): düzeltmek kullanıcı onayı bekliyor.
