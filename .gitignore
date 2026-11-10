@@ -5,3 +5,4 @@ uploads/
 .pytest_cache/
 app/services/deneme.py
 app/services/deneme/
+deploy/backups/

@@ -1,0 +1,35 @@
+# Caddy gets and renews the HTTPS certificate for {$DOMAIN} by itself (Let's Encrypt).
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(self), geolocation=(self), microphone=(), payment=()"
+		# The one inline script is the theme loader in index.html; if it changes, its hash here must change too:
+		#   node -e "..." prints it (see deploy/README.md). Styles stay inline-friendly for React and MUI.
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'sha256-Q4rS26uYKzTDR3OURvzFah0HekyBwRoI23xy2E6b/Oo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		-Server
+	}
+
+	# The app calls /api/...; the backend knows its routes without the prefix (same as the Vite proxy)
+	handle_path /api/* {
+		request_body {
+			max_size 12MB
+		}
+		reverse_proxy api:8000
+	}
+
+	# Everything else is the React app; unknown paths get index.html so the router can take them
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

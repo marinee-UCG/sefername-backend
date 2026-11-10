@@ -1,0 +1,101 @@
+# Sefernâme on one server.
+#
+#   internet ──443──▶ web (Caddy: HTTPS, React build, /api proxy) ──▶ api (FastAPI) ──▶ db (PostgreSQL)
+#                                                                      migrate runs once before api starts
+#                                                                      backup dumps the database every night
+#
+# Expects the two repos side by side:
+#   ~/sefername/seafarer-panel-backend   (this file is in its deploy/ folder)
+#   ~/sefername/seafarer-panel-frontend
+# Run from this folder:  docker compose up -d --build      (secrets come from deploy/.env, see .env.example)
+
+name: sefername
+
+x-api: &api
+  build: ..
+  image: sefername-api:latest
+  env_file: .env
+  environment:
+    DATABASE_URL: postgresql+psycopg://sefername:${POSTGRES_PASSWORD}@db:5432/sefername
+    COOKIE_SECURE: "true"
+    DOCS_ENABLED: "false"
+    CORS_ORIGINS: '["https://${DOMAIN}"]'
+    UPLOAD_DIR: /data/uploads
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sefername
+      POSTGRES_USER: sefername
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in deploy/.env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sefername -d sefername"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # No ports: the database is reachable only from the other containers
+
+  # Brings the schema up to date, then exits; api waits for it to succeed
+  migrate:
+    <<: *api
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    <<: *api
+    restart: unless-stopped
+    volumes:
+      - uploads:/data/uploads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    # No ports: only Caddy talks to it (uvicorn trusts its forwarded headers because of that)
+
+  web:
+    build: ../../seafarer-panel-frontend
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in deploy/.env}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL in deploy/.env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - api
+
+  # A dump of the database every night into deploy/backups, the last 14 kept.
+  # This only protects against mistakes; copy the folder off the server too (see README).
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      PGHOST: db
+      PGUSER: sefername
+      PGDATABASE: sefername
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      KEEP_DAYS: "14"
+    volumes:
+      - ./backup.sh:/backup.sh:ro
+      - ./backups:/backups
+    entrypoint: ["sh", "/backup.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db-data:
+  uploads:
+  caddy-data:
+  caddy-config:

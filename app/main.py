@@ -9,7 +9,12 @@ from app.routers import account,auth,contracts,vessels,identity_document,certifi
 
 
 
-app=FastAPI(title="SeaLog")
+app=FastAPI(
+    title="SeaLog",
+    docs_url="/docs" if settings.docs_enabled else None,
+    redoc_url=None,
+    openapi_url="/openapi.json" if settings.docs_enabled else None,
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,

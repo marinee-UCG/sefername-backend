@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     max_upload_size_mb:int=10
     cors_origins:list[str]=["http://localhost:5173"]
     cookie_secure:bool=False
+    # Swagger (/docs) is handy on the laptop; on the server it would show every endpoint to anyone
+    docs_enabled:bool=True
     
 
     model_config=SettingsConfigDict(env_file=".env")

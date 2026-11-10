@@ -198,6 +198,10 @@ seafarer-panel-backend/
 4. Liman cüzdanı çıkarma: yöntem sonra kararlaştırılacak (MRZ yok).
 5. OCR-B modeli ile isim doğruluğu.
 
+### Yayına alma (2026-11-10, hazır ama denenmedi)
+- `Dockerfile` (Python 3.14 + tesseract, root olmayan kullanıcı, `--proxy-headers`), frontend `Dockerfile` (node build → caddy), `deploy/`: `docker-compose.yml` (db, migrate, api, web, backup), `Caddyfile` (HTTPS, CSP/HSTS, `/api` → api), `backup.sh` (gece `pg_dump`, 14 gün), `.env.example`, `README.md` (adım adım VPS kurulumu). Production: `DOCS_ENABLED=false`, `COOKIE_SECURE=true`.
+- Bu bilgisayarda Docker yok: image'lar hiç derlenmedi, compose hiç çalıştırılmadı. İlk kurulumda (VPS veya Docker Desktop) hatalar çıkabilir.
+
 ### Bilinen açıklar / yapılacaklar
 - Kullanıcı silinince `uploads/<user_id>/` temizleniyor (`POST /account/delete`, 2026-11-10)
 - Refresh token **eklendi (2026-11-10)**: `models/refresh_token.py` (migration `49279e6589a0`), `core/sessions.py`. Token'ın sadece SHA-256'sı saklanır; her `POST /auth/refresh` token'ı değiştirir (rotation), kullanılmış token geri gelirse kullanıcının bütün oturumları kapanır. Login'de `remember` (varsayılan true): 30 gün kalıcı cookie, false ise tarayıcı oturumu + 1 gün. Logout refresh token'ı iptal eder (access JWT 30 dk geçerli kalır). Frontend 401'de bir kez yenileyip isteği tekrarlar.

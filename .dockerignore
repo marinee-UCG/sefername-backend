@@ -1,0 +1,13 @@
+# Keep secrets, personal files and local junk out of the image
+.env
+.env.*
+venv/
+uploads/
+app/services/deneme/
+app/services/deneme.py
+**/__pycache__/
+.pytest_cache/
+.git/
+tests/
+deploy/
+*.md
