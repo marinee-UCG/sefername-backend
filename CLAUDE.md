@@ -183,7 +183,7 @@ seafarer-panel-backend/
 
 ### Seferler (Voyage) + Seyir haritası — KARARLAR (2026-11-04)
 - Sıra: (1) Port modeli + seed migration, (2) Voyage modeli + şemalar + kurallar, (3) `services/routing.py` (searoute; **önce lisansı kontrol et**: kütüphane + deniz yolu ağı verisi), (4) endpoint'ler, (5) pytest, (6) frontend (tasarım: kullanıcı `design/` altına preview.html atacak, frontend'e gelince iste).
-- **EOSP ayrı aksiyon:** `POST /voyages/{id}/eosp` (sadece aktif sefer, iki kez bitirilemez 409, eosp > cosp 422). Düzeltme için PATCH sonra.
+- **EOSP ayrı aksiyon:** `POST /voyages/{id}/eosp` (sadece aktif sefer, iki kez bitirilemez 409, eosp > cosp 422). Düzeltme: `PATCH /voyages/{id}` (2026-11-10; limanlar, COSP, bitmiş seferde EOSP; null 422, aktif seferde EOSP 422 → EOSP aksiyonu, birleşik değerlerle kontrat tarih kuralları).
 - **Sefer kontrata zorunlu bağlı.** Gemideki kullanıcı önce aktif kontratını ekler (dashboard'da yönlendirme). `user_id` hep token'dan; kontrat kullanıcının değilse 404.
 - **`contract_id` → `ondelete=RESTRICT`** (kontrat silinince seyir defteri gitmesin; seferli kontrat silinmek istenirse 409). `user_id` → CASCADE (hesap silme). Port FK'leri RESTRICT.
 - Bir kontratın seferleri: `GET /voyages?contract_id=5` (ayrı endpoint yok).
@@ -198,7 +198,10 @@ seafarer-panel-backend/
 
 ### Bilinen açıklar / yapılacaklar
 - Kullanıcı silinince `uploads/<user_id>/` temizlenmeli (kullanıcı silme endpoint'i eklendiğinde)
-- Refresh token, login rate limiting
+- Refresh token
+- Login deneme sınırı **eklendi (2026-11-10)**: `core/rate_limit.py`, bellekte (aynı email+adres 15 dk'da 5, aynı adres 20 hatalı → 429 + Retry-After). Çoklu worker'da Redis'e taşınmalı; proxy arkasında uvicorn `--proxy-headers` gerekir. Bilinmeyen email de sahte hash ile doğrulanır (süre farkı hesap varlığını ele vermesin).
+- Pasaport onaylanınca `extracted_data` silinir (2026-11-10). Daha önce onaylanmış kayıtlarda eski veri duruyor olabilir (tek seferlik temizlik kullanıcı onayıyla).
+- `PATCH /contracts/{id}` bitiş tarihini içindeki seferlerin EOSP'sinden önceye çekebiliyor (demo veride bir örnek var: sefer 20) → kontrol eklenmeli
 - Dosyaların ve hassas alanların şifrelenmesi
 - Otomatik testler: sadece `mrz.py` için başladı; endpoint'ler hâlâ Swagger'da elle test ediliyor
 - `requirements.txt` güncellerken `>` kullanma (PowerShell 5.1 UTF-16 yazar): `pip freeze | Out-File -Encoding ascii requirements.txt`
