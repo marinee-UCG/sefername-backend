@@ -124,7 +124,7 @@ seafarer-panel-backend/
 ## 5. Mevcut durum
 
 ### Bitenler
-- Auth: `POST /auth/register` (sadece email + şifre, min 7), `POST /auth/login` (OAuth2 form, JWT 30 dk, httpOnly cookie), `POST /auth/logout`, `GET /auth/me`, `PATCH /auth/me` (`UserUpdate`: full_name, rank; full_name bir kez girilince null yapılamaz → 422)
+- Auth: `POST /auth/register` (sadece email + şifre, min 7), `POST /auth/login` (OAuth2 form, JWT 30 dk, httpOnly cookie), `POST /auth/logout`, `GET /auth/me`, `PATCH /auth/me` (`UserUpdate`: full_name, rank; full_name bir kez girilince null yapılamaz → 422); `home_timezone` (2026-11-10, migration `efd3e2f18975`): IANA adı, `zoneinfo.available_timezones()` dışındaki değer 422, null ile silinir. Gemide telefon gemi saatini tuttuğu için evin saati burada saklanır (frontend üst bardaki ev saati)
 - **Contracts** (`/contracts`): tam CRUD. Kurallar: tek aktif kontrat (409), bitiş > başlangıç (422), POST'ta `vessel_id` **veya** yeni `vessel` (tam olarak biri), yeni gemi + kontrat tek transaction, PATCH'te yeniden açma kontrolü. Cevapta iç içe `vessel`.
 - **Vessels** (`/vessels`): `GET` (alfabetik), `PATCH /{id}`. Gemi kontrat üzerinden eklenir.
 - **Certificates** (`/certificates`): tam CRUD; liste bitiş tarihine göre, süresizler sonda (`nulls_last`).

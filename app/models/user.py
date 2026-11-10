@@ -17,6 +17,8 @@ class User(Base):
     at_sea:Mapped[bool | None ]
     status_since:Mapped[date | None ]
     planned_sign_on:Mapped[date | None]
+    # IANA zone of home ("Europe/Istanbul"): the phone's clock follows ship's time at sea
+    home_timezone:Mapped[str | None]=mapped_column(String(64))
     onboarded_at:Mapped[datetime | None ]=mapped_column(DateTime(timezone=True))
     created_at:Mapped[datetime]=mapped_column(
         DateTime(timezone=True),server_default=func.now()
