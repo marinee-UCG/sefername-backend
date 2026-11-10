@@ -3,3 +3,5 @@ venv/
 __pycache__/
 uploads/
 .pytest_cache/
+app/services/deneme.py
+app/services/deneme/

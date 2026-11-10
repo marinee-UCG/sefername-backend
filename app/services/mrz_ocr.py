@@ -11,6 +11,9 @@ PDF_MAX_WIDTH = 3000   # pixels; some PDFs have huge pages, cap them to keep OCR
 MIN_IMAGE_WIDTH = 1500
 BOTTOM_CROP_RATIO = 0.35
 BINARY_THRESHOLD = 140
+MAX_LONG_EDGE = 2400   # pixels; phone photos are too large for Tesseract to read well
+MRZ_MARGIN = 15        # pixels kept around the MRZ so edge characters are not cut
+
 MRZ_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<"
 TESSERACT_CONFIG = f"--psm 6 -c tessedit_char_whitelist={MRZ_ALPHABET}"
 
@@ -39,6 +42,12 @@ def load_image(path: str) -> Image.Image:
     with Image.open(path) as img:
         # Phone photos store rotation in EXIF; apply it so the text is upright.
         return ImageOps.exif_transpose(img).convert("RGB")
+def shrink(gray:Image.Image) -> Image.Image:
+    scale=MAX_LONG_EDGE /max(gray.size)
+    if scale >= 1:
+        return gray
+    new_size= (round(gray.width*scale),round(gray.height*scale))
+    return gray.resize(new_size,Image.Resampling.LANCZOS)
 
 
 def to_gray(img: Image.Image) -> Image.Image:
@@ -63,6 +72,19 @@ def candidate_regions(img: Image.Image):
                             upright.width, upright.height))   # passport page: MRZ at bottom
         yield upright                                         # A4 scan: passport anywhere
 
+def mrz_region(img: Image.Image) -> Image.Image | None:
+    """Find the MRZ with a free page read and cut it out; None when no MRZ-like text is seen."""
+    small = shrink(img)
+    data = pytesseract.image_to_data(small, output_type=pytesseract.Output.DICT)
+    words = [i for i, word in enumerate(data["text"]) if "<<" in word]
+    if not words:
+        return None
+    return small.crop((
+        max(0, min(data["left"][i] for i in words) - MRZ_MARGIN),
+        max(0, min(data["top"][i] for i in words) - MRZ_MARGIN),
+        max(data["left"][i] + data["width"][i] for i in words) + MRZ_MARGIN,
+        max(data["top"][i] + data["height"][i] for i in words) + MRZ_MARGIN,
+    ))
 
 def fix_positions(line: str, slices: list[slice], table: dict) -> str:
     chars = list(line)
@@ -78,6 +100,7 @@ def find_td3_lines(text: str) -> tuple[str, str] | None:
         if not first.startswith("P"):
             continue
         # Trailing "<" fillers on line 1 are often dropped by OCR; restore them.
+        first = first[:TD3_LINE_LENGTH]   # OCR sometimes adds extra fillers at the end
         if len(first) < TD3_LINE_LENGTH:
             first = first.ljust(TD3_LINE_LENGTH, "<")
         if len(first) == TD3_LINE_LENGTH and len(second) == TD3_LINE_LENGTH:
@@ -86,6 +109,13 @@ def find_td3_lines(text: str) -> tuple[str, str] | None:
             second = fix_positions(second, LINE2_DIGIT_SLICES, TO_DIGIT)
             return first, second
     return None
+
+def reading_candidates(img: Image.Image):
+    region = mrz_region(img)
+    if region is not None:
+        yield region
+    for region in candidate_regions(img):
+        yield from preprocess_variants(region)
 
 
 def extract_passport_data(path: str) -> dict:
@@ -96,19 +126,19 @@ def extract_passport_data(path: str) -> dict:
     """
     img = load_image(path)
     fallback = None
-    for region in candidate_regions(img):
-        for variant in preprocess_variants(region):
-            text = pytesseract.image_to_string(variant, config=TESSERACT_CONFIG)
-            lines = find_td3_lines(text)
-            if lines is None:
-                continue
-            try:
-                result = parse_td3(*lines)
-            except MRZError:
-                continue
-            if result["all_checks_passed"]:
-                return result
-            fallback = fallback or result
+    for candidate in reading_candidates(img):
+        text = pytesseract.image_to_string(candidate, config=TESSERACT_CONFIG)
+        lines = find_td3_lines(text)
+        if lines is None:
+            continue
+        try:
+            result = parse_td3(*lines)
+        except MRZError:
+            continue
+        if result["all_checks_passed"]:
+            return result
+        fallback = fallback or result
+
     if fallback is not None:
         return fallback
     raise MRZNotFoundError("Could not find a passport MRZ in the document")
