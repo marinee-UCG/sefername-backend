@@ -9,7 +9,7 @@ from app.database import get_db
 from app.models.user import User
 from app.models.port import Port
 from app.models.voyage import Voyage
-from app.schemas.voyage import VoyageCreate,VoyageEosp,VoyageOut
+from app.schemas.voyage import VoyageCreate,VoyageEosp,VoyageOut,VoyageUpdate
 from app.models.contract import Contract
 
 
@@ -138,6 +138,82 @@ def end_voyage(
     voyage.eosp_at=eosp_in.eosp_at
 
     db.commit()
+    db.refresh(voyage)
+    return voyage_out(voyage)
+
+@router.patch("/{voyage_id}",response_model=VoyageOut)
+def update_voyage(
+    voyage_in:VoyageUpdate,
+    voyage:Voyage=Depends(get_user_voyage_or_404),
+    db:Session=Depends(get_db)
+):
+    update_data=voyage_in.model_dump(exclude_unset=True)
+
+    # Every field is required on the model; eosp_at cannot be cleared either
+    # (reopening a voyage would clash with the "one active voyage" rule)
+    for field in ("from_port_id","to_port_id","cosp_at","eosp_at"):
+        if field in update_data and update_data[field] is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"{field} cannot be null."
+            )
+    if "eosp_at" in update_data and voyage.eosp_at is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="This voyage is still under way. Give EOSP to end it."
+        )
+
+    # Rules checked with the values the voyage will have after the update
+    new_from=update_data.get("from_port_id",voyage.from_port_id)
+    new_to=update_data.get("to_port_id",voyage.to_port_id)
+    new_cosp=update_data.get("cosp_at",voyage.cosp_at)
+    new_eosp=update_data.get("eosp_at",voyage.eosp_at)
+
+    if new_from==new_to:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Departure and arrival ports must be different."
+        )
+    for field in ("from_port_id","to_port_id"):
+        if field in update_data and db.get(Port,update_data[field]) is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Unknown port."
+            )
+    contract=voyage.contract
+    if new_cosp.date()<contract.start_date:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="COSP cannot be before the contract start date."
+        )
+    if contract.end_date is not None and new_cosp.date()>contract.end_date:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="COSP cannot be after the contract end date."
+        )
+    if new_eosp is not None:
+        if new_eosp<=new_cosp:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="EOSP must be after COSP."
+            )
+        if contract.end_date is not None and new_eosp.date()>contract.end_date:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="EOSP cannot be after the contract end date."
+            )
+
+    for key,value in update_data.items():
+        setattr(voyage,key,value)
+    try:
+        db.commit()
+    except IntegrityError:
+        # The database's own checks caught something the rules above missed
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="These voyage details are not valid."
+        )
     db.refresh(voyage)
     return voyage_out(voyage)
 

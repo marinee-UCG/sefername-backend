@@ -13,6 +13,13 @@ class VoyageCreate(BaseModel):
 class VoyageEosp(BaseModel):
     eosp_at:AwareDatetime
 
+class VoyageUpdate(BaseModel):
+    # Corrections only: the contract stays, and an active voyage still ends with EOSP
+    from_port_id:int|None=None
+    to_port_id:int|None=None
+    cosp_at:AwareDatetime|None=None
+    eosp_at:AwareDatetime|None=None
+
 class VoyageOut(BaseModel):
     model_config=ConfigDict(from_attributes=True)
 
