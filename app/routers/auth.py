@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status,Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from datetime import datetime,timezone
+from datetime import date,datetime,timedelta,timezone
 
 from fastapi.security import OAuth2PasswordRequestForm
 from app.core.security import hash_password,verify_password,create_access_token,ACCESS_TOKEN_COOKIE
@@ -72,6 +72,14 @@ def update_me(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="full_name cannot be null.",
+        )
+
+    planned=update_data.get("planned_sign_on")
+    # One day of slack: the user's today can be the server's yesterday
+    if planned is not None and planned < date.today()-timedelta(days=1):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Planned sign-on cannot be in the past.",
         )
 
     for key,value in update_data.items():

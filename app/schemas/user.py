@@ -9,6 +9,7 @@ class UserCreate(BaseModel):
 class UserUpdate(BaseModel):
     full_name:str | None = Field(default=None,min_length=1,max_length=100)
     rank:str | None = Field(default=None,min_length=1,max_length=50)
+    planned_sign_on:date | None = None
 
 
 class OnboardingIn(BaseModel):
@@ -29,6 +30,7 @@ class UserOut(BaseModel):
     department:str | None
     at_sea:bool | None
     status_since:date | None
+    planned_sign_on:date | None
     onboarded_at:datetime | None
 
 class Token(BaseModel):
