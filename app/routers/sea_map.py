@@ -10,15 +10,16 @@ from app.models.user import User
 from app.models.voyage import Voyage
 from app.schemas.map import MapOut,MapTotals,MapPosition,MapVoyage
 from app.schemas.port import PortOut
-from app.services.routing import RouteError,SeaRoute,point_along_route,sea_route
+from app.services.routing import RouteError,SeaRoute,point_along_route,sea_route,progress_fraction,PLANNED_SPEED_KN
+
 
 router=APIRouter(prefix="/map",tags=["map"])
-PLANNED_SPEED_KN=12
+
+
 
 def approximate_position(voyage:Voyage,route:SeaRoute) -> MapPosition:
     expected_hours=route.distance_nm/PLANNED_SPEED_KN
-    elapsed_hours=(datetime.now(timezone.utc)-voyage.cosp_at).total_seconds()/3600
-    fraction=min(1,max(0,elapsed_hours/expected_hours)) if expected_hours > 0 else 0
+    fraction=progress_fraction(voyage.cosp_at,route.distance_nm,datetime.now(timezone.utc))
     lon,lat=point_along_route(route.coordinates,fraction)
 
 

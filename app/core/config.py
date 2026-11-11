@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     cookie_secure:bool=False
     # Swagger (/docs) is handy on the laptop; on the server it would show every endpoint to anyone
     docs_enabled:bool=True
+    promotion_service_days:int=900
     
 
     model_config=SettingsConfigDict(env_file=".env")
