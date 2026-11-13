@@ -1,7 +1,7 @@
 from fastapi import APIRouter,Depends,Query,HTTPException,status
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session,selectinload
 from sqlalchemy.exc import IntegrityError
 
 from app.core.deps import get_current_user
@@ -223,7 +223,7 @@ def list_voyages(
     current_user:User=Depends(get_current_user),
     db:Session=Depends(get_db)
 ):
-    query=select(Voyage).where(Voyage.user_id==current_user.id)
+    query=select(Voyage).where(Voyage.user_id==current_user.id).options(selectinload(Voyage.from_port),selectinload(Voyage.to_port),selectinload(Voyage.contract).selectinload(Contract.vessel))
     if contract_id is not None:
         query=query.where(Voyage.contract_id==contract_id)
     query=query.order_by(Voyage.cosp_at.desc())

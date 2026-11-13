@@ -2,7 +2,7 @@ from datetime import date,timedelta
 
 from fastapi import APIRouter,Depends,HTTPException,status
 from sqlalchemy import or_,select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session,selectinload
 
 
 from app.core.deps import get_current_user
@@ -63,7 +63,7 @@ def check_no_overlap(db:Session,user_id:int,start:date,end:date | None,exclude_i
 
 @router.get("",response_model=list[ContractOut])
 def get_contract(current_user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-    query=select(Contract).where(Contract.user_id==current_user.id).order_by(Contract.start_date.desc())
+    query=select(Contract).where(Contract.user_id==current_user.id).options(selectinload(Contract.vessel)).order_by(Contract.start_date.desc())
 
     return db.scalars(query).all()
 

@@ -2,10 +2,11 @@ from datetime import datetime,timedelta,timezone
 
 from fastapi import APIRouter,Depends
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session,selectinload
 
 from app.core.deps import get_current_user
 from app.database import get_db
+from app.models.contract import Contract
 from app.models.user import User
 from app.models.voyage import Voyage
 from app.schemas.map import MapOut,MapTotals,MapPosition,MapVoyage
@@ -36,7 +37,7 @@ def get_map(
     current_user:User=Depends(get_current_user),
     db:Session=Depends(get_db)
 ):
-    query=select(Voyage).where(Voyage.user_id==current_user.id).order_by(Voyage.cosp_at.desc())
+    query=select(Voyage).where(Voyage.user_id==current_user.id).options(selectinload(Voyage.from_port),selectinload(Voyage.to_port),selectinload(Voyage.contract).selectinload(Contract.vessel)).order_by(Voyage.cosp_at.desc())
     voyages=db.scalars(query).all()
 
     map_voyages=[]

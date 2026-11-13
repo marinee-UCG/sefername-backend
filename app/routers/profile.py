@@ -2,7 +2,7 @@ from datetime import datetime,timezone
 from fastapi import APIRouter,Depends
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session,selectinload
 
 from app.core.deps import get_current_user
 from app.database import get_db
@@ -28,10 +28,10 @@ def get_profile_stats(
     current_user:User=Depends(get_current_user),
     db:Session=Depends(get_db)
 ):
-    contract_query=select(Contract).where(Contract.user_id==current_user.id)
+    contract_query=select(Contract).where(Contract.user_id==current_user.id).options(selectinload(Contract.vessel))
     contracts=db.scalars(contract_query).all()
 
-    voyage_query=select(Voyage).where(Voyage.user_id==current_user.id)
+    voyage_query=select(Voyage).where(Voyage.user_id==current_user.id).options(selectinload(Voyage.from_port),selectinload(Voyage.to_port))
     voyages=db.scalars(voyage_query).all()
 
     now=datetime.now(timezone.utc)
