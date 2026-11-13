@@ -1,6 +1,6 @@
 from fastapi import APIRouter,Depends,Query
 
-from sqlalchemy import select,or_,case
+from sqlalchemy import select,or_,case,union
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
@@ -8,6 +8,7 @@ from app.database import get_db
 from app.models.user import User
 from app.models.port import Port
 from app.schemas.port import PortOut
+from app.models.voyage import Voyage
 
 router=APIRouter(prefix="/ports",tags=["ports"])
 
@@ -17,10 +18,15 @@ def search_ports(
     current_user:User=Depends(get_current_user),
     db:Session=Depends(get_db)
 ):
+    from_ports=select(Voyage.from_port_id).where(Voyage.user_id==current_user.id)
+    to_ports=select(Voyage.to_port_id).where(Voyage.user_id==current_user.id)
+    my_ports=union(from_ports,to_ports)
+
     match_rank=case(
         (Port.locode.ilike(q),0),
-        (Port.name.ilike(f"{q}%"),1),
-        else_=2
+        (Port.id.in_(my_ports),1),
+        (Port.name.ilike(f"{q}%"),2),
+        else_=3
     )
     query=(
         select(Port)
