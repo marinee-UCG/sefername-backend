@@ -1,11 +1,15 @@
 from datetime import date,timedelta
 
-from fastapi import APIRouter,Depends,HTTPException,status
+from fastapi import APIRouter,Depends,HTTPException,status,UploadFile,File
+from fastapi.responses import FileResponse
+from pathlib import Path
 from sqlalchemy import or_,select
 from sqlalchemy.orm import Session,selectinload
 
 
 from app.core.deps import get_current_user
+from app.core.storage import save_upload,delete_file,FileTooLargeError,UnsupportedFileTypeError
+from app.core.config import settings
 from app.database import get_db
 from app.models.contract import Contract
 from app.models.user import User
@@ -57,7 +61,7 @@ def check_no_overlap(db:Session,user_id:int,start:date,end:date | None,exclude_i
         until=other.end_date.isoformat() if other.end_date else "now"
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"These dates overlap your contract on {other.vessel.name} ({other.start_date.isoformat()} to {until}).",
+            detail=f"These dates overlap your contract on {other.vessel.name} ({other.start_date.isoformat()} to {until}). ",
         )
 
 
@@ -135,6 +139,7 @@ def create_contract(
 @router.get("/{contract_id}",response_model=ContractOut)
 def get_contract_by_id(contract:Contract=Depends(get_user_contract_or_404)):
     return contract
+
 @router.delete("/{contract_id}",status_code=status.HTTP_204_NO_CONTENT)
 def delete_contract_by_id(contract:Contract=Depends(get_user_contract_or_404),db:Session=Depends(get_db)):
     has_voyages=db.scalar(
@@ -145,8 +150,11 @@ def delete_contract_by_id(contract:Contract=Depends(get_user_contract_or_404),db
             status_code=status.HTTP_409_CONFLICT,
             detail="This contract has voyages.Delete them first"
         )
+    file_path=contract.service_doc_path
     db.delete(contract)
     db.commit()
+    if file_path is not None:
+        delete_file(file_path)
 
 @router.patch("/{contract_id}", response_model=ContractOut)
 def update_contract(
@@ -230,7 +238,7 @@ def update_contract(
         if other_active is not None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="You already have an active contract. Complete it before reopening this one.",
+                detail="You already have an active contract. Complete it before reopening this one. ",
             )
 
     for key, value in update_data.items():
@@ -238,6 +246,84 @@ def update_contract(
     db.commit()
     db.refresh(contract)
     return contract
+
+@router.post("/{contract_id}/service-doc",response_model=ContractOut)
+def upload_service_doc(
+    file:UploadFile=File(...),
+    contract:Contract=Depends(get_user_contract_or_404),
+    db:Session=Depends(get_db)
+):
+    if contract.end_date is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Your contract is still active.Sign off first"
+        )
+    try:
+        new_path=save_upload(file,contract.user_id)
+    except FileTooLargeError:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f"File is too large.Max size is {settings.max_upload_size_mb} mB"
+        )
+    except UnsupportedFileTypeError:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Unsupported file type. Only PDF,JPG and PNG are allowed. "
+        )
+    old_path=contract.service_doc_path
+    contract.service_doc_path=new_path
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        delete_file(new_path)
+        raise
+    if old_path is not None:
+        delete_file(old_path)
+    db.refresh(contract)
+    return contract
+
+MEDIA_TYPES = {
+    ".pdf": "application/pdf",
+    ".jpg": "image/jpeg",
+    ".png": "image/png",
+}
+
+@router.get("/{contract_id}/service-doc")
+def download_service_doc(
+    contract:Contract=Depends(get_user_contract_or_404)
+):
+    if contract.service_doc_path is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This contract has no service doc."
+        )
+    path=Path(contract.service_doc_path)
+    if not path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File not found"
+        )
+    return FileResponse(
+        path,
+        media_type=MEDIA_TYPES.get(path.suffix, "application/octet-stream"),
+        filename=f"Sea Service {contract.start_date}-{contract.end_date}{path.suffix}"
+    )
+    
+@router.delete("/{contract_id}/service-doc",status_code=status.HTTP_204_NO_CONTENT)
+def delete_service_doc(
+    contract:Contract=Depends(get_user_contract_or_404),
+    db:Session=Depends(get_db)
+):
+    if contract.service_doc_path is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This contract has no service doc"
+        )
+    old_path=contract.service_doc_path
+    contract.service_doc_path=None
+    db.commit()
+    delete_file(old_path)
 
     
 

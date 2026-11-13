@@ -141,6 +141,7 @@ MEDIA_TYPES = {
     ".jpg": "image/jpeg",
     ".png": "image/png",
 }
+
 @router.get("/{certificate_id}/file")
 def download_certificate_file(
         certificate:Certificate=Depends(get_user_certificate_or_404),

@@ -24,6 +24,7 @@ class ContractOut(BaseModel):
     end_date:date | None
     vessel:VesselOut
     planned_end_date:date | None
+    has_service_doc:bool
 
 class ContractUpdate(BaseModel):
     company:str | None=Field(default=None,min_length=1,max_length=100)

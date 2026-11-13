@@ -23,3 +23,8 @@ class Contract(Base):
     end_date:Mapped[date | None]
     planned_end_date:Mapped[date |None]
     vessel:Mapped["Vessel"]=relationship()
+    service_doc_path:Mapped[str | None]=mapped_column(String(255))
+    @property
+    def has_service_doc(self) -> bool:
+        return self.service_doc_path is not None
+
