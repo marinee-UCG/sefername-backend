@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date,timedelta
 
 from fastapi import APIRouter,Depends,HTTPException,status
 from sqlalchemy import or_,select
@@ -30,7 +30,16 @@ def get_user_contract_or_404(
         )
     return selected_contract
 
-
+def check_not_in_future(
+        day:date | None,
+        label:str
+):
+    if day is not None and day > date.today() + timedelta(days=1):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"{label} cannot be in the future"
+        )
+    
 
 
 def check_no_overlap(db:Session,user_id:int,start:date,end:date | None,exclude_id:int | None=None) -> None:
@@ -74,6 +83,8 @@ def create_contract(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Provide vessel_id for an existing vessel or vessel details for a new one.",
         )
+    check_not_in_future(contract_in.start_date,"Sign-on date")
+    check_not_in_future(contract_in.end_date,"Sign-off date")
     if contract_in.end_date is not None and contract_in.end_date <= contract_in.start_date:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -156,6 +167,7 @@ def update_contract(
     # Tarih kontrolü: güncelleme sonrası oluşacak değerlerle
     new_start = update_data.get("start_date", contract.start_date)
     new_end = update_data.get("end_date", contract.end_date)
+
     if new_end is not None and new_end <= new_start:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -171,6 +183,10 @@ def update_contract(
     # Checked only for dates that really change, so fixing the company name never trips on old data
     start_changed=new_start!=contract.start_date
     end_changed=new_end!=contract.end_date
+    if start_changed:
+        check_not_in_future(new_start,"Sign-on date")
+    if end_changed:
+        check_not_in_future(new_end,"Sign-off date")
     if start_changed or end_changed:
         check_no_overlap(db,contract.user_id,new_start,new_end,exclude_id=contract.id)
 
