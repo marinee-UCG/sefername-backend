@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.audit import security_event
 from app.core.config import settings
 from app.core.deps import get_current_user
 from app.core.rate_limit import MAX_FAILURES_PER_ACCOUNT, login_throttle
@@ -19,6 +20,8 @@ from app.models.identity_document import IdentityDocument
 from app.models.user import User
 from app.models.voyage import Voyage
 from app.routers.voyages import voyage_out
+from app.routers.certificates import certificate_out
+from app.routers.identity_document import document_out
 from app.schemas.account import AccountDelete, AccountExport, PasswordChange
 
 router = APIRouter(prefix="/account", tags=["account"])
@@ -29,6 +32,7 @@ def check_password(user: User, password: str) -> None:
     key = f"password:{user.id}"
     wait = login_throttle.retry_after(key, MAX_FAILURES_PER_ACCOUNT)
     if wait:
+        security_event("password_check_blocked", user_id=user.id, retry_after=wait)
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many wrong passwords. Try again later.",
@@ -36,6 +40,8 @@ def check_password(user: User, password: str) -> None:
         )
     if not verify_password(password, user.hashed_password):
         login_throttle.record_failure(key)
+        # Someone holding a signed-in device but not knowing the password: worth seeing
+        security_event("password_check_failed", user_id=user.id)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Your current password is not right.")
     login_throttle.reset(key)
 
@@ -54,6 +60,7 @@ def change_password(
     # Every other device has to sign in with the new password; this one (web or app) carries on
     # with the tokens it already holds, so nothing new has to be sent back
     end_all_sessions(db, current_user.id, keep_session_id=request.state.session_id)
+    security_event("password_changed", request, user_id=current_user.id)
 
 
 @router.get("/export", response_model=AccountExport)
@@ -69,8 +76,8 @@ def export_account(current_user: User = Depends(get_current_user), db: Session =
         profile=current_user,
         contracts=contracts,
         voyages=[voyage_out(v) for v in voyages],
-        certificates=certificates,
-        identity_documents=documents,
+        certificates=[certificate_out(c) for c in certificates],
+        identity_documents=[document_out(d) for d in documents],
     )
     # A download, not a page: the browser saves it under a dated name
     return JSONResponse(
@@ -82,12 +89,15 @@ def export_account(current_user: User = Depends(get_current_user), db: Session =
 @router.post("/delete", status_code=status.HTTP_204_NO_CONTENT)
 def delete_account(
     delete_in: AccountDelete,
+    request: Request,
     response: Response,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     check_password(current_user, delete_in.password)
     user_id = current_user.id
+    # Only the id stays in the log: the account and its data are gone
+    security_event("account_deleted", request, user_id=user_id)
 
     # The database removes the user's rows with the account (ON DELETE CASCADE)
     db.delete(current_user)

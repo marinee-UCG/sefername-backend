@@ -51,6 +51,12 @@ services:
   api:
     <<: *api
     restart: unless-stopped
+    # Security events and errors go to stdout; keep about 50 MB of them, then the oldest are dropped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     volumes:
       - uploads:/data/uploads
     depends_on:
@@ -75,7 +81,7 @@ services:
     depends_on:
       - api
 
-  # A dump of the database every night into deploy/backups, the last 14 kept.
+  # Every night: the database and the uploaded files, encrypted, into deploy/backups; the last 14 kept.
   # This only protects against mistakes; copy the folder off the server too (see README).
   backup:
     image: postgres:17-alpine
@@ -86,9 +92,12 @@ services:
       PGDATABASE: sefername
       PGPASSWORD: ${POSTGRES_PASSWORD}
       KEEP_DAYS: "14"
+      BACKUP_PASSPHRASE: ${BACKUP_PASSPHRASE:?Set BACKUP_PASSPHRASE in deploy/.env}
     volumes:
       - ./backup.sh:/backup.sh:ro
       - ./backups:/backups
+      # Read-only: the backup can copy the files but never change them
+      - uploads:/uploads:ro
     entrypoint: ["sh", "/backup.sh"]
     depends_on:
       db:

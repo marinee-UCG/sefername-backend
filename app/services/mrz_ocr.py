@@ -1,8 +1,8 @@
-from pathlib import Path
+import io
 
 import pymupdf
 import pytesseract
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from app.services.mrz import TD3_LINE_LENGTH, MRZError, parse_td3
 
@@ -13,6 +13,9 @@ BOTTOM_CROP_RATIO = 0.35
 BINARY_THRESHOLD = 140
 MAX_LONG_EDGE = 2400   # pixels; phone photos are too large for Tesseract to read well
 MRZ_MARGIN = 15        # pixels kept around the MRZ so edge characters are not cut
+# Width x height cap, checked before any pixel is decoded. A 48 MP phone photo fits;
+# a small file that claims 30000 x 30000 pixels (a "decompression bomb") would need gigabytes of memory.
+MAX_IMAGE_PIXELS = 50_000_000
 
 MRZ_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<"
 TESSERACT_CONFIG = f"--psm 6 -c tessedit_char_whitelist={MRZ_ALPHABET}"
@@ -30,16 +33,36 @@ class MRZNotFoundError(MRZError):
     """No readable passport MRZ was found in the document."""
 
 
-def load_image(path: str) -> Image.Image:
-    if Path(path).suffix.lower() == ".pdf":
-        with pymupdf.open(path) as doc:
+def load_image(content: bytes, suffix: str) -> Image.Image:
+    """Opens the file from memory: files are stored encrypted, so there is no plain file on disk to open."""
+    if suffix.lower() == ".pdf":
+        try:
+            doc = pymupdf.open(stream=content, filetype="pdf")
+        except (pymupdf.FileDataError, RuntimeError) as exc:
+            raise MRZNotFoundError("PDF could not be opened") from exc
+        with doc:
             if doc.page_count == 0:
                 raise MRZNotFoundError("PDF has no pages")
             page = doc[0]
-            zoom = min(PDF_RENDER_DPI / 72, PDF_MAX_WIDTH / page.rect.width)
+            width, height = page.rect.width, page.rect.height
+            if width <= 0 or height <= 0:
+                raise MRZNotFoundError("PDF page has no size")
+            # Capped by width and by total pixels: a very tall page must not render into a huge image
+            zoom = min(PDF_RENDER_DPI / 72, PDF_MAX_WIDTH / width, (MAX_IMAGE_PIXELS / (width * height)) ** 0.5)
             pixmap = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom))
             return Image.frombytes("RGB", (pixmap.width, pixmap.height), pixmap.samples)
-    with Image.open(path) as img:
+    try:
+        img = Image.open(io.BytesIO(content))
+    except Image.DecompressionBombError as exc:
+        # Pillow refuses the very largest by itself, with its own error: turn it into ours (422, not 500)
+        raise MRZNotFoundError("Image is too large to read") from exc
+    except UnidentifiedImageError as exc:
+        # Starts like a JPG/PNG but the rest is damaged
+        raise MRZNotFoundError("Image could not be opened") from exc
+    with img:
+        # Image.open reads only the header, so the size is known before the pixels are decoded
+        if img.width * img.height > MAX_IMAGE_PIXELS:
+            raise MRZNotFoundError("Image is too large to read")
         # Phone photos store rotation in EXIF; apply it so the text is upright.
         return ImageOps.exif_transpose(img).convert("RGB")
 def shrink(gray:Image.Image) -> Image.Image:
@@ -118,13 +141,13 @@ def reading_candidates(img: Image.Image):
         yield from preprocess_variants(region)
 
 
-def extract_passport_data(path: str) -> dict:
-    """Read the passport MRZ from a PDF/JPG/PNG and return parsed fields.
+def extract_passport_data(content: bytes, suffix: str) -> dict:
+    """Read the passport MRZ from a PDF/JPG/PNG (its bytes and extension) and return parsed fields.
 
     Returns the first result whose check digits all pass; if none passes,
     returns the first readable result (checks show what is suspicious).
     """
-    img = load_image(path)
+    img = load_image(content, suffix)
     fallback = None
     for candidate in reading_candidates(img):
         text = pytesseract.image_to_string(candidate, config=TESSERACT_CONFIG)

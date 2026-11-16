@@ -8,6 +8,7 @@ from fastapi import Response
 from sqlalchemy import delete, or_, select, update
 from sqlalchemy.orm import Session
 
+from app.core.audit import security_event
 from app.core.config import settings
 from app.core.security import ACCESS_TOKEN_COOKIE, create_access_token
 from app.models.refresh_token import RefreshToken
@@ -94,6 +95,7 @@ def refresh_session(db: Session, raw_token: str | None) -> SessionTokens:
         if now-row.replaced_at <= REFRESH_REUSE_GRACE:
             raise SessionError
         # An old token came back long after: someone has a copy. End every sign-in of this user.
+        security_event("refresh_token_reused",user_id=row.user_id,session_id=row.session_id)
         end_all_sessions(db,row.user_id)
         raise SessionError
     if row.expires_at <= now:

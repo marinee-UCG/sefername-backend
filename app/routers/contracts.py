@@ -1,14 +1,14 @@
 from datetime import date,timedelta
 
 from fastapi import APIRouter,Depends,HTTPException,status,UploadFile,File
-from fastapi.responses import FileResponse
+from app.core.downloads import file_download
 from pathlib import Path
 from sqlalchemy import or_,select
 from sqlalchemy.orm import Session,selectinload
 
 
 from app.core.deps import get_current_user
-from app.core.storage import save_upload,delete_file,FileTooLargeError,UnsupportedFileTypeError
+from app.core.storage import save_upload,delete_file,FileTooLargeError,UnsupportedFileTypeError,StorageQuotaError
 from app.core.config import settings
 from app.database import get_db
 from app.models.contract import Contract
@@ -270,6 +270,11 @@ def upload_service_doc(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail="Unsupported file type. Only PDF,JPG and PNG are allowed. "
         )
+    except StorageQuotaError:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f"Your storage is full ({settings.user_storage_limit_mb} MB). Delete a file you no longer need and try again."
+        )
     old_path=contract.service_doc_path
     contract.service_doc_path=new_path
     try:
@@ -283,12 +288,6 @@ def upload_service_doc(
     db.refresh(contract)
     return contract
 
-MEDIA_TYPES = {
-    ".pdf": "application/pdf",
-    ".jpg": "image/jpeg",
-    ".png": "image/png",
-}
-
 @router.get("/{contract_id}/service-doc")
 def download_service_doc(
     contract:Contract=Depends(get_user_contract_or_404)
@@ -298,17 +297,8 @@ def download_service_doc(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="This contract has no service doc."
         )
-    path=Path(contract.service_doc_path)
-    if not path.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="File not found"
-        )
-    return FileResponse(
-        path,
-        media_type=MEDIA_TYPES.get(path.suffix, "application/octet-stream"),
-        filename=f"Sea Service {contract.start_date}-{contract.end_date}{path.suffix}"
-    )
+    suffix=Path(contract.service_doc_path).suffix
+    return file_download(contract.service_doc_path, f"Sea Service {contract.start_date}-{contract.end_date}{suffix}", contract.user_id)
     
 @router.delete("/{contract_id}/service-doc",status_code=status.HTTP_204_NO_CONTENT)
 def delete_service_doc(

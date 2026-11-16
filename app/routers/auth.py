@@ -13,6 +13,7 @@ from app.models.user import User
 from app.schemas.user import UserCreate, UserOut,UserUpdate,OnboardingIn,TokenPair,RefreshIn
 from app.core.deps import get_current_user
 from app.core.config import settings
+from app.core.audit import security_event
 
 router =APIRouter(prefix="/auth",tags=["auth"])
 
@@ -38,6 +39,7 @@ def authenticate(request:Request,form_data:OAuth2PasswordRequestForm,db:Session)
         login_throttle.retry_after(email_key,MAX_FAILURES_PER_EMAIL),
     )
     if wait:
+        security_event("login_blocked",request,email=email,retry_after=wait)
         minutes=max(1,round(wait/60))
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -53,12 +55,15 @@ def authenticate(request:Request,form_data:OAuth2PasswordRequestForm,db:Session)
         login_throttle.record_failure(account_key)
         login_throttle.record_failure(address_key)
         login_throttle.record_failure(email_key)
+        # known_account is for whoever reads the log, never sent to the client
+        security_event("login_failed",request,email=email,known_account=user is not None)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Wrong email or password",
             headers={"WWW-Authenticate":"Bearer"},
         )
     login_throttle.reset(account_key)
+    security_event("login_succeeded",request,user_id=user.id)
     return user
 
 
@@ -78,6 +83,7 @@ def register(user_in:UserCreate,request:Request,db:Session=Depends(get_db)):
     address_key=f"register:{address}"
     wait=register_throttle.retry_after(address_key,MAX_REGISTRATIONS_PER_ADDRESS)
     if wait:
+        security_event("register_blocked",request,retry_after=wait)
         minutes=max(1,round(wait/60))
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -89,6 +95,8 @@ def register(user_in:UserCreate,request:Request,db:Session=Depends(get_db)):
     email=user_in.email.lower()
     existing=db.scalar(select(User).where(User.email==email))
     if existing:
+        # Many of these from one address = someone checking which emails have an account
+        security_event("register_email_taken",request,email=email)
         raise HTTPException(status_code=status.HTTP_409_CONFLICT,detail="Email already in use")
     user=User(
         email=email,
@@ -97,6 +105,7 @@ def register(user_in:UserCreate,request:Request,db:Session=Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
+    security_event("register_succeeded",request,user_id=user.id)
     return user
 
 

@@ -57,3 +57,6 @@ class LoginThrottle:
 login_throttle = LoginThrottle()
 # Same counter, separate book: every sign-up attempt is recorded, not only the failed ones
 register_throttle = LoginThrottle()
+# Passport reads: each one keeps a CPU busy for seconds, so a few per hour per user
+# (per user, not per address: a whole ship shares one address)
+extract_throttle = LoginThrottle(window_seconds=60 * 60)

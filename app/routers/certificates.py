@@ -1,11 +1,12 @@
 from fastapi import APIRouter,Depends,HTTPException,status,File,UploadFile
-from fastapi.responses import FileResponse
+from app.core.downloads import file_download
 from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.storage import FileTooLargeError,UnsupportedFileTypeError,save_upload,delete_file
+from app.core.crypto import seal,open_sealed
+from app.core.storage import FileTooLargeError,UnsupportedFileTypeError,StorageQuotaError,save_upload,delete_file
 
 from app.core.deps import get_current_user
 from app.database import get_db
@@ -14,6 +15,22 @@ from app.models.certificate import Certificate
 from app.schemas.certificate import CertificateCreate,CertificateOut,CertificateUpdate
 
 router=APIRouter(prefix="/certificates",tags=["certificates"])
+
+# Stored encrypted, bound to the owner (see core/crypto.py); name and dates stay plain for sorting and reminders
+SEALED_FIELDS=("cert_number","issuing_inst")
+
+def seal_fields(data:dict,user_id:int) -> dict:
+    for field in SEALED_FIELDS:
+        if field in data:
+            data[field]=seal(data[field],user_id)
+    return data
+
+def certificate_out(certificate:Certificate) -> CertificateOut:
+    """What the owner sees: sealed fields opened first, then checked against the schema."""
+    fields={name:getattr(certificate,name) for name in CertificateOut.model_fields}
+    for field in SEALED_FIELDS:
+        fields[field]=open_sealed(getattr(certificate,field),certificate.user_id)
+    return CertificateOut.model_validate(fields)
 
 def get_user_certificate_or_404(
         certificate_id:int,
@@ -37,11 +54,11 @@ def list_certificates(
 ):
     query=select(Certificate).where(Certificate.user_id==current_user.id).order_by(Certificate.expiry_date.asc().nulls_last())
 
-    return db.scalars(query).all()
+    return [certificate_out(c) for c in db.scalars(query).all()]
 
 @router.get("/{certificate_id}",response_model=CertificateOut)
 def get_certificate_by_id(certificate:Certificate=Depends(get_user_certificate_or_404)):
-    return certificate
+    return certificate_out(certificate)
 
 @router.delete("/{certificate_id}",status_code=status.HTTP_204_NO_CONTENT)
 def delete_certificate_by_id(certificate:Certificate=Depends(get_user_certificate_or_404),db:Session=Depends(get_db)):
@@ -68,13 +85,13 @@ def create_certificate(
             detail="Expiry date must be after issue date"
         )
     certificate=Certificate(
-        **certificate_in.model_dump(),
+        **seal_fields(certificate_in.model_dump(),current_user.id),
         user_id=current_user.id
     )
     db.add(certificate)
     db.commit()
     db.refresh(certificate)
-    return certificate
+    return certificate_out(certificate)
 
 
 @router.patch("/{certificate_id}",response_model=CertificateOut)
@@ -98,11 +115,12 @@ def update_certificate(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Expiry date must be after issue date."
         )
+    update_data=seal_fields(update_data,certificate.user_id)
     for key,value in update_data.items():
         setattr(certificate,key,value)
     db.commit()
     db.refresh(certificate)
-    return certificate
+    return certificate_out(certificate)
 
 
 @router.post("/{certificate_id}/file",response_model=CertificateOut)
@@ -123,6 +141,11 @@ def upload_certificate_file(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail="Unsupported file type.Only PDF,JPG and PNG are allowed"
         )
+    except StorageQuotaError:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f"Your storage is full ({settings.user_storage_limit_mb} MB). Delete a file you no longer need and try again."
+        )
     old_path=certificate.file_path
     certificate.file_path=new_path
     try:
@@ -134,37 +157,19 @@ def upload_certificate_file(
     if old_path is not None:
         delete_file(old_path)
     db.refresh(certificate)
-    return certificate
-
-MEDIA_TYPES = {
-    ".pdf": "application/pdf",
-    ".jpg": "image/jpeg",
-    ".png": "image/png",
-}
+    return certificate_out(certificate)
 
 @router.get("/{certificate_id}/file")
 def download_certificate_file(
         certificate:Certificate=Depends(get_user_certificate_or_404),
-       
+
 ):
     if certificate.file_path is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="This certificate has no file.",
         )
-
-    path = Path(certificate.file_path)
-    if not path.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="File not found.",
-        )
-
-    return FileResponse(
-        path,
-        media_type=MEDIA_TYPES.get(path.suffix, "application/octet-stream"),
-        filename=f"certificate{path.suffix}",
-    )
+    return file_download(certificate.file_path, f"certificate{Path(certificate.file_path).suffix}", certificate.user_id)
 
 
 
