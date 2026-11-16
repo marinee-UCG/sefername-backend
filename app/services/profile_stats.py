@@ -3,6 +3,7 @@ from app.schemas.profile import Promotion
 from app.schemas.profile import TypeDays,RankDays,ContractRecord,VoyageRecord,PortRecord
 from app.schemas.profile import MilestoneOut,ProfileRecords,ProfileStats,ProfileTotals
 from app.services.routing import RouteError,progress_fraction,route_prefix
+from app.services.voyage_speed import estimated_speed_kn
 
 RANK_STEPS=[
     ("Engineer Officer",("Fourth Engineer","Third Engineer"),"Second Engineer"),
@@ -148,14 +149,14 @@ def home_days(contracts,today:date) ->int:
     return total
 
     
-def sailed_route(voyage,now:datetime,route_for):
+def sailed_route(voyage,voyages,now:datetime,route_for):
     try:
         route=route_for(voyage)
     except RouteError:
         return None
     if voyage.eosp_at is not None:
         return route.coordinates,route.distance_nm
-    ratio=progress_fraction(voyage.cosp_at,route.distance_nm,now)
+    ratio=progress_fraction(voyage.cosp_at,route.distance_nm,now,estimated_speed_kn(voyage,voyages))
     prefix=route_prefix(route.coordinates,ratio)
     sailed=route.distance_nm * ratio
 
@@ -172,7 +173,7 @@ def voyage_totals(voyages,now:datetime,route_for)-> dict:
         ports.add(voyage.to_port.id)
         countries.add(voyage.from_port.country_code)
         countries.add(voyage.to_port.country_code)
-        sailed=sailed_route(voyage,now,route_for)
+        sailed=sailed_route(voyage,voyages,now,route_for)
         if sailed is None:
             continue
         coordinates,nm=sailed
@@ -203,7 +204,7 @@ def longest_voyage(voyages,now:datetime,route_for) -> VoyageRecord | None:
     if not voyages:
         return None
     longest=max(voyages,key=lambda v:voyage_days(v,now))
-    sailed=sailed_route(longest,now,route_for)
+    sailed=sailed_route(longest,voyages,now,route_for)
     if sailed is None:
         distance=None
     else:
@@ -270,7 +271,7 @@ def voyage_timelines(voyages,today:date,now:datetime,route_for) -> dict:
         ports.add(voyage.to_port.id)
         countries.add(voyage.from_port.country_code)
         countries.add(voyage.to_port.country_code)
-        sailed=sailed_route(voyage,now,route_for)
+        sailed=sailed_route(voyage,voyages,now,route_for)
         if sailed is not None:
             coordinates,nm=sailed
             distance += nm

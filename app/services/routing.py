@@ -44,11 +44,11 @@ def point_along_route(
 
     return coordinates[-1]
 
-def progress_fraction(cosp_at:datetime,distance_nm:float,now:datetime) -> float:
+def progress_fraction(cosp_at:datetime,distance_nm:float,now:datetime,speed_kn:float = PLANNED_SPEED_KN) -> float:
     if distance_nm <= 0:
         return 0
     
-    expected_hours=distance_nm /PLANNED_SPEED_KN
+    expected_hours=distance_nm /speed_kn
     elapsed_hours=(now-cosp_at).total_seconds()/3600
     fraction=min(1,max(0,elapsed_hours/expected_hours)) if expected_hours > 0 else 0
 

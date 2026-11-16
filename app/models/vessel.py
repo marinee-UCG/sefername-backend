@@ -17,3 +17,4 @@ class Vessel(Base):
     gt: Mapped[int | None]
     main_engine: Mapped[str | None] = mapped_column(String(100))
     kw: Mapped[int | None]
+    service_speed_kn:Mapped[float|None]

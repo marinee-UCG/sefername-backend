@@ -9,6 +9,7 @@ class VesselCreate(BaseModel):
     gt: int | None = Field(default=None, ge=0)
     main_engine: str | None = Field(default=None, max_length=100)
     kw: int | None = Field(default=None, ge=0)
+    service_speed_kn:float | None =Field(default=None,gt=0,le=50)
 
 class VesselOut(BaseModel):
     model_config=ConfigDict(from_attributes=True)
@@ -21,6 +22,7 @@ class VesselOut(BaseModel):
     gt:int| None
     main_engine:str| None
     kw:int| None
+    service_speed_kn:float | None
 
 
 class VesselUpdate(BaseModel):
@@ -32,3 +34,4 @@ class VesselUpdate(BaseModel):
     gt: int | None = Field(default=None, ge=0)
     main_engine: str | None = Field(default=None, max_length=100)
     kw: int | None = Field(default=None, ge=0)
+    service_speed_kn:float | None =Field(default=None,gt=0,le=50)
