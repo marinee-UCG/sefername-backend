@@ -44,7 +44,11 @@ class UserOut(BaseModel):
     home_timezone:str | None
     onboarded_at:datetime | None
 
-class Token(BaseModel):
-    # Only filled where Swagger is on (settings.docs_enabled); the app signs in with cookies
-    access_token:str | None = None
+class TokenPair(BaseModel):
+    access_token:str
+    refresh_token:str
     token_type:str = "bearer"
+    expires_in:int
+
+class RefreshIn(BaseModel):
+    refresh_token:str=Field(min_length=1,max_length=128)

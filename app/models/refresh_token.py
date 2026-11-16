@@ -18,6 +18,8 @@ class RefreshToken(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    session_id:Mapped[str]=mapped_column(String(32),index=True)
+    replaced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # "Keep me signed in": the cookie outlives the browser; otherwise it ends with it
     persistent: Mapped[bool]
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

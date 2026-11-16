@@ -11,7 +11,7 @@ from app.core.config import settings
 from app.core.deps import get_current_user
 from app.core.rate_limit import MAX_FAILURES_PER_ACCOUNT, login_throttle
 from app.core.security import hash_password, verify_password
-from app.core.sessions import REFRESH_TOKEN_COOKIE, clear_cookies, end_all_sessions, is_persistent, start_session
+from app.core.sessions import clear_cookies, end_all_sessions
 from app.database import get_db
 from app.models.certificate import Certificate
 from app.models.contract import Contract
@@ -44,21 +44,16 @@ def check_password(user: User, password: str) -> None:
 def change_password(
     password_in: PasswordChange,
     request: Request,
-    response: Response,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     check_password(current_user, password_in.current_password)
-    raw_refresh = request.cookies.get(REFRESH_TOKEN_COOKIE)
-    remember = is_persistent(db, raw_refresh)
 
     current_user.hashed_password = hash_password(password_in.new_password)
     db.commit()
-    # Every other device has to sign in with the new password; this one carries on
-    end_all_sessions(db, current_user.id)
-    start_session(response, db, current_user.id, persistent=remember)
-    response.status_code = status.HTTP_204_NO_CONTENT
-    return response
+    # Every other device has to sign in with the new password; this one (web or app) carries on
+    # with the tokens it already holds, so nothing new has to be sent back
+    end_all_sessions(db, current_user.id, keep_session_id=request.state.session_id)
 
 
 @router.get("/export", response_model=AccountExport)
