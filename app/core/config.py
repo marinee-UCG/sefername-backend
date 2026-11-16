@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     news_feed_url:str="https://www.trthaber.com/manset_articles.rss"
     news_refresh_minutes:int=15
     news_count:int=5
+    currency_feed_url:str="https://www.tcmb.gov.tr/kurlar/today.xml"
+    currency_refresh_minutes:int=60
+    currency_codes:list[str]=["USD","EUR","GBP"]
     
 
     model_config=SettingsConfigDict(env_file=".env")
