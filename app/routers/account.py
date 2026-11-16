@@ -27,6 +27,7 @@ from app.schemas.user import SocialLoginIn
 from app.models.user_identity import UserIdentity
 from app.routers.auth import verified_identity
 from app.services.apple_links import revoke as revoke_apple_link, store_refresh_token
+from app.services.account_deletion import delete_user
 from sqlalchemy.exc import IntegrityError
 from typing import Literal
 
@@ -133,21 +134,8 @@ def delete_account(
     db: Session = Depends(get_db),
 ):
     confirm_it_is_you(current_user, delete_in, request, db)
-    user_id = current_user.id
-    # Only the id stays in the log: the account and its data are gone
-    security_event("account_deleted", request, user_id=user_id)
-
-    # The database removes the user's rows with the account (ON DELETE CASCADE)
-    # Apple's rule: a deleted account's "Sign in with Apple" link is revoked at Apple too (best effort)
-    for link in db.scalars(select(UserIdentity).where(UserIdentity.user_id == user_id)).all():
-        revoke_apple_link(link)
-    db.delete(current_user)
-    db.commit()
-
-    # Then the uploaded files: passport scans must not outlive the account
-    user_dir = Path(settings.upload_dir) / str(user_id)
-    shutil.rmtree(user_dir, ignore_errors=True)
-
+    # Every step (Apple, database, files, log) lives in services/account_deletion.py
+    delete_user(db, current_user, by="user", ip=request.client.host if request.client else None)
     clear_cookies(response)
     response.status_code = status.HTTP_204_NO_CONTENT
     return response

@@ -23,3 +23,8 @@ class User(Base):
     created_at:Mapped[datetime]=mapped_column(
         DateTime(timezone=True),server_default=func.now()
     )
+
+    @property
+    def has_password(self) -> bool:
+        # Accounts made with Google/Apple have none; the app shows Settings accordingly
+        return self.hashed_password is not None

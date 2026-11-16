@@ -43,6 +43,7 @@ class UserOut(BaseModel):
     planned_sign_on:date | None
     home_timezone:str | None
     onboarded_at:datetime | None
+    has_password:bool
 
 class TokenPair(BaseModel):
     access_token:str
