@@ -4,10 +4,11 @@ from threading import Lock
 
 # Failed sign-ins allowed inside the window, before the door closes for a while
 MAX_FAILURES_PER_ACCOUNT = 5   # same email from the same address
-MAX_FAILURES_PER_ADDRESS = 20  # any email from the same address
+MAX_FAILURES_PER_EMAIL=20 #same email from any address:many addresses cannot add up to many tries
+MAX_FAILURES_PER_ADDRESS = 100  # any email from the same address but whole vessel may use same address.
 # Sign-ups from one address in the same window: enough for a family on one Wi-Fi,
 # too few to try a list of emails and learn who already has an account
-MAX_REGISTRATIONS_PER_ADDRESS = 10
+MAX_REGISTRATIONS_PER_ADDRESS = 30
 WINDOW_SECONDS = 15 * 60
 
 

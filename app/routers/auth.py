@@ -5,7 +5,7 @@ from datetime import date,datetime,timedelta,timezone
 
 from fastapi.security import OAuth2PasswordRequestForm
 from app.core.security import hash_password,verify_password,DUMMY_PASSWORD_HASH
-from app.core.rate_limit import login_throttle,register_throttle,MAX_FAILURES_PER_ACCOUNT,MAX_FAILURES_PER_ADDRESS,MAX_REGISTRATIONS_PER_ADDRESS
+from app.core.rate_limit import login_throttle,register_throttle,MAX_FAILURES_PER_ACCOUNT,MAX_FAILURES_PER_ADDRESS,MAX_REGISTRATIONS_PER_ADDRESS,MAX_FAILURES_PER_EMAIL
 from app.core.sessions import REFRESH_TOKEN_COOKIE,SessionError,SessionTokens,clear_cookies,end_session,refresh_session,start_session,set_session_cookies
 
 from app.database import get_db
@@ -28,12 +28,14 @@ def authenticate(request:Request,form_data:OAuth2PasswordRequestForm,db:Session)
     # Behind a proxy this is the proxy's address unless uvicorn runs with --proxy-headers
     address=request.client.host if request.client else "unknown"
     account_key=f"account:{email}|{address}"
+    email_key=f"email:{email}"
     address_key=f"address:{address}"
 
     # Checked before the password: a locked door does not even look at the key
     wait=max(
         login_throttle.retry_after(account_key,MAX_FAILURES_PER_ACCOUNT),
         login_throttle.retry_after(address_key,MAX_FAILURES_PER_ADDRESS),
+        login_throttle.retry_after(email_key,MAX_FAILURES_PER_EMAIL),
     )
     if wait:
         minutes=max(1,round(wait/60))
@@ -50,6 +52,7 @@ def authenticate(request:Request,form_data:OAuth2PasswordRequestForm,db:Session)
     if not user or not password_ok:
         login_throttle.record_failure(account_key)
         login_throttle.record_failure(address_key)
+        login_throttle.record_failure(email_key)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Wrong email or password",

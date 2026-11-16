@@ -237,7 +237,7 @@ seafarer-panel-backend/
 - Sea chart kendi adresinde: `/chart?voyage=<id>` (yenileme ve geri tuşu çalışır); filtreler (gemi, yıl), etiket çakışma önleme (öncelik + hover'da ad), seçili seferin adı sağ altta.
 - Tasarım kuralları için `.claude/skills/sefername-design`; gözden geçirici için uygulama özeti `docs/app-brief.md`.
 
-**Açık kalanlar:** öğlen raporu (Noon) backend'i yok (ertelendi); hizmet belgesinin orijinal adı saklanmıyor; haber kaynağı arayüz diline göre seçilmiyor; şifremi unuttum yok (e-posta sistemi yok); deneme sınırları bellekte (çoklu worker'da Redis) ve adres başına (gemi interneti/CGNAT'ta bütün mürettebat tek IP → hesap ağırlıklı olmalı); `/extract` ve yüklemelerde kullanıcı başına sınır/kota yok; dosyalar ve yedekler şifresiz, `uploads/` yedeklenmiyor; Docker hiç çalıştırılmadı; testler `mrz.py` dışında yok (MVP sonrası).
+**Açık kalanlar:** öğlen raporu (Noon) backend'i yok (ertelendi); hizmet belgesinin orijinal adı saklanmıyor; haber kaynağı arayüz diline göre seçilmiyor; şifremi unuttum yok (e-posta sistemi yok); deneme sınırları bellekte (çoklu worker'da Redis; 2026-11-16'dan beri üç katman: e-posta+IP 5, e-posta 20 (sıfırlanmaz, dağıtık saldırı), IP 100 (gemi/CGNAT tek IP), kayıt IP başına 30); `/extract` ve yüklemelerde kullanıcı başına sınır/kota yok; dosyalar ve yedekler şifresiz, `uploads/` yedeklenmiyor; Docker hiç çalıştırılmadı; testler `mrz.py` dışında yok (MVP sonrası).
 
 ---
 
