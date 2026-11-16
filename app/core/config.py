@@ -23,6 +23,17 @@ class Settings(BaseSettings):
     max_upload_size_mb:int=10
     user_storage_limit_mb:int=200
     extract_per_hour:int = 10
+    #Sign in with google/apple:the appids tokens must be issued for (te token's "aud").
+    #Empty list=that button is off.Web and ios have diff.ids so it is a list
+    google_client_ids:list[str]=[]
+    apple_client_ids:list[str]=[]
+    # Apple's rules: when an account is deleted, its "Sign in with Apple" link must be revoked at Apple.
+    # Talking to Apple needs these three, from developer.apple.com > Keys (a key with "Sign in with Apple"):
+    # the Team ID, the key's ID, and the downloaded .p8 file's text (line breaks may be written as "\n").
+    # The private key is a secret: .env only. Empty = links are not revoked (sign-in still works).
+    apple_team_id:str|None=None
+    apple_key_id:str|None=None
+    apple_private_key:str|None=None
     cors_origins:list[str]=["http://localhost:5173"]
     cookie_secure:bool=False
     # Swagger (/docs) is handy on the laptop; on the server it would show every endpoint to anyone

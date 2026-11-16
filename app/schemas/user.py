@@ -52,3 +52,13 @@ class TokenPair(BaseModel):
 
 class RefreshIn(BaseModel):
     refresh_token:str=Field(min_length=1,max_length=128)
+
+class SocialLoginIn(BaseModel):
+    # The ID token from Google / Apple, as their sign-in returned it (a JWT, a few kB at most)
+    id_token:str=Field(min_length=1,max_length=8192)
+    # The random value the app gave the provider for this sign-in; checked against the token
+    nonce:str=Field(min_length=16,max_length=128)
+    remember:bool=True
+    # Apple only: the one-time code that comes with the token; swapped for the link's refresh token,
+    # which lets us revoke the link at Apple when the account is deleted
+    authorization_code:str|None=Field(default=None,min_length=1,max_length=1024)

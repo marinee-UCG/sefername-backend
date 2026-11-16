@@ -1,6 +1,8 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.certificate import CertificateOut
 from app.schemas.contract import ContractOut
@@ -15,8 +17,21 @@ class PasswordChange(BaseModel):
 
 
 class AccountDelete(BaseModel):
-    # Asked again on purpose: an open laptop must not be enough to wipe an account
-    password: str = Field(min_length=1, max_length=128)
+    # Asked again on purpose: an open laptop must not be enough to wipe an account.
+    # With a password: the password. Without one (Google/Apple only): a fresh sign-in with that provider.
+    password: str | None = Field(default=None, min_length=1, max_length=128)
+    provider: Literal["google", "apple"] | None = None
+    id_token: str | None = Field(default=None, min_length=1, max_length=8192)
+    nonce: str | None = Field(default=None, min_length=16, max_length=128)
+
+
+class IdentityOut(BaseModel):
+    """A connected Google / Apple sign-in, as Settings lists it."""
+    model_config = ConfigDict(from_attributes=True)
+
+    provider: str
+    email: str | None
+    created_at: datetime
 
 
 class AccountExport(BaseModel):

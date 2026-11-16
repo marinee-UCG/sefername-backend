@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Form, HTTPException, status,Response,Request
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from datetime import date,datetime,timedelta,timezone
 
@@ -8,9 +9,12 @@ from app.core.security import hash_password,verify_password,DUMMY_PASSWORD_HASH
 from app.core.rate_limit import login_throttle,register_throttle,MAX_FAILURES_PER_ACCOUNT,MAX_FAILURES_PER_ADDRESS,MAX_REGISTRATIONS_PER_ADDRESS,MAX_FAILURES_PER_EMAIL
 from app.core.sessions import REFRESH_TOKEN_COOKIE,SessionError,SessionTokens,clear_cookies,end_session,refresh_session,start_session,set_session_cookies
 
+from app.services.apple_links import store_refresh_token
+from app.services.social_auth import ProviderDisabledError,ProviderUnavailableError,SocialAuthError,SocialIdentity,verify_id_token
 from app.database import get_db
+from app.models.user_identity import UserIdentity
 from app.models.user import User
-from app.schemas.user import UserCreate, UserOut,UserUpdate,OnboardingIn,TokenPair,RefreshIn
+from app.schemas.user import UserCreate, UserOut,UserUpdate,OnboardingIn,TokenPair,RefreshIn,SocialLoginIn
 from app.core.deps import get_current_user
 from app.core.config import settings
 from app.core.audit import security_event
@@ -50,8 +54,11 @@ def authenticate(request:Request,form_data:OAuth2PasswordRequestForm,db:Session)
     user=db.scalar(select(User).where(User.email==email))
     # Always verify against some hash, so an unknown email takes as long as a wrong password
     # (otherwise the response time tells which emails have an account)
-    password_ok=verify_password(form_data.password,user.hashed_password if user else DUMMY_PASSWORD_HASH)
-    if not user or not password_ok:
+    # An account made with Google/Apple has no password: it is checked against the dummy hash too
+    # (same timing) and always fails, so nobody can sign in to it with a password
+    has_password=user is not None and user.hashed_password is not None
+    password_ok=verify_password(form_data.password,user.hashed_password if has_password else DUMMY_PASSWORD_HASH)
+    if not has_password or not password_ok:
         login_throttle.record_failure(account_key)
         login_throttle.record_failure(address_key)
         login_throttle.record_failure(email_key)
@@ -66,6 +73,44 @@ def authenticate(request:Request,form_data:OAuth2PasswordRequestForm,db:Session)
     security_event("login_succeeded",request,user_id=user.id)
     return user
 
+def social_sign_in(db:Session,identity:SocialIdentity) -> User:
+    query=select(UserIdentity).where(UserIdentity.provider==identity.provider,UserIdentity.subject==identity.subject)
+    link=db.scalar(query)
+    if link is not None:
+        return db.get(User,link.user_id)
+    if identity.email is not None:
+        query2=select(User).where(User.email==identity.email)
+        link2=db.scalar(query2)
+        if link2 is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"An account with this email already exists. Sign in with your password, then connect {identity.provider.title()} in Settings"
+            )
+    if identity.email is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Your Google/Apple account did not share an email address"
+        )
+    if not identity.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="This email address is not verified with the provider"
+        )
+    user=User(email=identity.email,hashed_password=None)
+    db.add(user)
+    db.flush()
+    db.add(UserIdentity(
+        user_id=user.id,
+        provider=identity.provider,
+        subject=identity.subject,
+        email=identity.email,
+        client_id=identity.audience,
+    ))
+    db.commit()
+    db.refresh(user)
+    return user
+
+    
 
 def token_pair(tokens:SessionTokens) -> TokenPair:
     return TokenPair(
@@ -182,6 +227,80 @@ def refresh_token(refresh_in:RefreshIn,db:Session=Depends(get_db)):
 def revoke_token(refresh_in:RefreshIn,db:Session=Depends(get_db)):
     # Always 204, even for an unknown token (as in RFC 7009): the answer must not tell which tokens exist
     end_session(db,refresh_in.refresh_token)
+
+
+# ---------- Sign in with Google / Apple (both doors) ----------
+
+def verified_identity(provider:str,login_in:SocialLoginIn,request:Request) -> SocialIdentity:
+    """The provider's ID token checked (services/social_auth.py), its errors turned into HTTP codes."""
+    try:
+        return verify_id_token(provider,login_in.id_token,login_in.nonce)
+    except ProviderDisabledError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail=f"Sign in with {provider.title()} is not available.")
+    except ProviderUnavailableError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"{provider.title()} could not be reached. Try again in a moment.",
+        )
+    except SocialAuthError as exc:
+        # The reason stays in our log; the user only learns that it did not work
+        security_event("social_login_failed",request,provider=provider,reason=str(exc)[:100])
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Sign in with {provider.title()} failed. Please try again.",
+            headers={"WWW-Authenticate":"Bearer"},
+        )
+
+
+def social_user(provider:str,login_in:SocialLoginIn,request:Request,db:Session) -> User:
+    identity=verified_identity(provider,login_in,request)
+    try:
+        user=social_sign_in(db,identity)
+    except IntegrityError:
+        # Two first sign-ins at the same moment: the other one created the account and its link
+        # (the unique constraints stopped this one), so the link is there now
+        db.rollback()
+        user=social_sign_in(db,identity)
+    if login_in.authorization_code:
+        # Apple: keep the link's refresh token (newest wins) so the link can be revoked on deletion
+        link=db.scalar(select(UserIdentity).where(UserIdentity.provider==identity.provider,UserIdentity.subject==identity.subject))
+        link.client_id=link.client_id or identity.audience
+        store_refresh_token(link,login_in.authorization_code)
+        db.commit()
+    security_event("social_login_succeeded",request,user_id=user.id,provider=provider)
+    return user
+
+
+def web_social_login(provider:str,login_in:SocialLoginIn,request:Request,response:Response,db:Session) -> Response:
+    user=social_user(provider,login_in,request,db)
+    set_session_cookies(response,start_session(db,user.id,persistent=login_in.remember))
+    response.status_code=status.HTTP_204_NO_CONTENT
+    return response
+
+
+def native_social_login(provider:str,login_in:SocialLoginIn,request:Request,db:Session) -> TokenPair:
+    user=social_user(provider,login_in,request,db)
+    return token_pair(start_session(db,user.id,persistent=True))
+
+
+@router.post("/google",status_code=status.HTTP_204_NO_CONTENT)
+def login_google(login_in:SocialLoginIn,request:Request,response:Response,db:Session=Depends(get_db)):
+    return web_social_login("google",login_in,request,response,db)
+
+
+@router.post("/apple",status_code=status.HTTP_204_NO_CONTENT)
+def login_apple(login_in:SocialLoginIn,request:Request,response:Response,db:Session=Depends(get_db)):
+    return web_social_login("apple",login_in,request,response,db)
+
+
+@router.post("/token/google",response_model=TokenPair)
+def token_google(login_in:SocialLoginIn,request:Request,db:Session=Depends(get_db)):
+    return native_social_login("google",login_in,request,db)
+
+
+@router.post("/token/apple",response_model=TokenPair)
+def token_apple(login_in:SocialLoginIn,request:Request,db:Session=Depends(get_db)):
+    return native_social_login("apple",login_in,request,db)
 
 
 # ---------- Profile ----------

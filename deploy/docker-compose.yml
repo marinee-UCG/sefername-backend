@@ -65,7 +65,13 @@ services:
     # No ports: only Caddy talks to it (uvicorn trusts its forwarded headers because of that)
 
   web:
-    build: ../../seafarer-panel-frontend
+    build:
+      context: ../../seafarer-panel-frontend
+      args:
+        # Baked into the page at build time (public id, not a secret); empty = no Google button
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_WEB_CLIENT_ID:-}
+        VITE_APPLE_CLIENT_ID: ${APPLE_WEB_CLIENT_ID:-}
+        VITE_APPLE_REDIRECT_URI: ${APPLE_REDIRECT_URI:-}
     restart: unless-stopped
     environment:
       DOMAIN: ${DOMAIN:?Set DOMAIN in deploy/.env}
