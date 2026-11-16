@@ -62,7 +62,7 @@ Uygulama ileride App Store'da yayınlanacak ve kimlik belgeleri tutuyor. Gizlili
 
 **Sistem bağımlılığı:** Tesseract OCR (`C:\Program Files\Tesseract-OCR`, PATH'te). Docker'a geçince Dockerfile'a yazılacak.
 
-**Frontend (henüz başlamadı):** React (Vite).
+**Frontend:** React 19 + Vite, düz JavaScript, kendi CSS token'larımız (Tailwind yok). Kütüphaneler: react-router, @headlessui/react, @mui/icons-material, sonner (toast), vaul (sheet), @number-flow/react, react-day-picker. Frontend'i Claude yazar; backend öğretmen modunda.
 
 ### Klasör yapısı
 ```
@@ -157,7 +157,8 @@ seafarer-panel-backend/
 - `src/pages/OnboardingPage.jsx` şimdilik **yer tutucu** (karşılama + çıkış). Hazır prop'lar: `user`, `onComplete(updatedUser)` (PATCH sonrası çağrılınca App ana sayfayı açar), `onLogout`.
 - Backend: `PATCH /auth/me` ile ad ve rütbe kaydedilir.
 - **Kesin:** ilk soru ad soyad (kayıt formundan kaldırıldı).
-- **KARARLAR (kullanıcı, 2026-11-04):** her soru ayrı ekran, üstte ilerleme çubuğu. Ekran sırası: (1) ad soyad, (2) departman (güverte/makine), (3) rütbe, (4) şu an gemide mi evde mi, (5) gemideyse "gemiye ne zaman çıktın", evdeyse "gemiden ne zaman indin" (tarih), (6) **profil kartı / özet** — kullanıcı tüm cevapları görür, her satırdan ilgili ekrana dönüp düzeltebilir; "Confirm" ile `POST /auth/onboarding` gider (kullanıcı kararı 2026-11-04), Confirm → `onComplete(user)` → doğrudan dashboard. **Belge yükleme onboarding'den çıkarıldı (2026-11-04), dashboard'dan yapılacak.** Onboarding BİTTİ.
+- **GÜNCEL (2026-11-13):** 4 ekran: (1) ad soyad, (2) departman (seçince kendiliğinden ilerler), (3) rütbe (kaydırılabilir açılır menü), (4) **profil kartı / özet**. "Şu an gemide mi evde mi" ve tarih soruları **kaldırıldı**: kontratsız kullanıcıda yanlış durum oluşturuyordu; gemide/evde bilgisi artık sadece kontratlardan hesaplanır. `OnboardingIn.at_sea` / `status_since` opsiyonel (`= None`), frontend göndermiyor. Kontratı olmayan yeni hesap dashboard'da "Are you on board now?" başlangıç kartını görür (Sign on / Add a past contract → `/contracts?add=1`).
+- Eski karar (2026-11-04, artık geçerli değil): (1) ad soyad, (2) departman, (3) rütbe, (4) gemide mi evde mi, (5) tarih, (6) **profil kartı / özet** — kullanıcı tüm cevapları görür, her satırdan ilgili ekrana dönüp düzeltebilir; "Confirm" ile `POST /auth/onboarding` gider (kullanıcı kararı 2026-11-04), Confirm → `onComplete(user)` → doğrudan dashboard. **Belge yükleme onboarding'den çıkarıldı (2026-11-04), dashboard'dan yapılacak.** Onboarding BİTTİ.
 
 ### Sertifika / belge / kontrat sayfaları — KARARLAR (2026-11-09)
 - Seyir defteri paneli **ertelendi** (harita ve "Sea chart" düğmesi çalışıyor, sol panel boş). Önce uygulamanın ilk kısmı bitecek: Certificates, Contracts, Documents sayfaları.
@@ -167,7 +168,7 @@ seafarer-panel-backend/
 - **DURUM (2026-11-09): frontend ilk kısım BİTTİ (kullanıcı "sen yap" dedi, commit'leri kendisi atacak).** Sayfalar: `CertificatesPage` (özet, `ExpiryStrip`, gruplu liste, detay, STCW kodları `utils/certificates.js`, kodlar kullanıcı tarafından doğrulanacak), `ContractsPage` (özet, 5 yıl hizmet çubuğu, `MiniRoute`, sefer ekleme/EOSP/silme: `VoyageForms.jsx`, `ContractForm`), `DocumentsPage` (`DocumentForms.jsx`: tarama = upload + extract, "To check" onayı, dosya açma `apiFile`). Ortak: `components/Register.css`, `DetailPane`, `DeleteButton`, `SidePanel`. `SeaMap`: seyir defteri paneli, sefer seçince yakınlaşma, 60 sn drift + 14 sn tur, etiket çakışması gizleme. Dashboard: Sea Ledger'da nm, "Complete your account" kartı. Formda saat cihazın saat dilimiyle gönderilir (gemi saati seçeneği yok).
 - **Tasarım kararı (2026-11-09, güncel):** Certificates sayfası kullanıcının eklediği `design/cert wallet.html` gibi olacak (sertifika kartları, mühür, kâğıt dokusu, durum cümlesi, Attention/Valid/No expiry grupları). Bunu uygularken netleştir: tasarımda "Dosya yükle"/dosya ve hatırlatma var; backend'de sertifika dosyası ve hatırlatma yok, önceki karar "normal sertifikaya dosya yok, sadece ekstra sertifika yükleme" idi. Beğenildi, uygulanacak: `design/documents-wallet-reference.html` (özellikle) ve `design/contracts-timeline-reference.html`.
 - **Kart sayfaları koda geçti (2026-11-09):** `CertificatesPage` (`cert wallet.html`: gruplu kart yığınları, mühür, sheet içinde dosya yükle/aç/değiştir ve sil) ve `DocumentsPage` (`documents-wallet-reference.html`). Detay satırı stilleri `CertificatesPage.css`'te, Documents de onu import ediyor. Hatırlatma ve "Geçmiş" satırları backend olmadığı için çıkarıldı. `ContractsPage` da `contracts-timeline-reference.html`'e geçti (gemi başına kulvar, seçilen kontrat çizelgenin altında sheet, telefonda peek kartı + tam ekran detay; backend değişikliği gerekmedi). Eski özet kartı ve 5 yıl çubuğu kalktı, 5 yıl bilgisi başlık satırında.
-- **Backend isteyen eksikler:** ekstra sertifika yükleme (`DocType` sadece passport/seaman_book; referanstaki sağlık/vize/aşı türleri de yok), `GET /ports` tam/önek eşleşmeyi öne almalı ("mer" yazınca alfabetik ilk 15'te Mersin çıkmıyor), hatırlatma ayarı, hizmet dökümü/PDF, kontratta sign-on/off limanı, `IdentityDocumentOut`'a "dosya var mı" bilgisi.
+- **Backend isteyen eksikler:** ekstra sertifika yükleme (`DocType` sadece passport/seaman_book; referanstaki sağlık/vize/aşı türleri de yok), ~~`GET /ports` sıralaması~~ (yapıldı 2026-11-15: LOCODE tam eşleşme → kullanıcının seferlerinde geçen limanlar → adla başlayan → içinde geçen), hatırlatma ayarı, hizmet dökümü/PDF, kontratta sign-on/off limanı, `IdentityDocumentOut`'a "dosya var mı" bilgisi.
 - Tasarım araçları: `design-builder` / `design-reviewer` ajanları, `/tasarim` komutu, `sefername-design` skill'i. Kullanıcı istemedikçe çalıştırılmaz.
 - Ekleme formu: ilgili sayfada açılan panel (masaüstü sağdan, mobil alttan; öneri, kullanıcı onayı bekliyor). Dashboard sadece özet gösterir.
 
@@ -213,6 +214,28 @@ seafarer-panel-backend/
 - Otomatik testler: sadece `mrz.py` için başladı; endpoint'ler hâlâ Swagger'da elle test ediliyor
 - `requirements.txt` güncellerken `>` kullanma (PowerShell 5.1 UTF-16 yazar): `pip freeze | Out-File -Encoding ascii requirements.txt`
 - CORS (frontend başlayınca)
+
+---
+
+### Son eklenenler (2026-11-12 … 2026-11-16)
+**Backend (kullanıcı yazdı, öğretmen modu; güvenlik düzeltmelerini Claude yazdı):**
+- `GET /profile/stats` (`services/profile_stats.py`): deniz günü, terfi ilerlemesi (`settings.promotion_service_days`, TR kuralı 900 gün), 25 rozet (milestone) ve kazanıldıkları tarih, rekorlar.
+- `GET /news` (`services/news.py`, "Karadan Özeti"): TRT Haber manşet RSS (`settings.news_feed_url`), ilk 5 başlık; 10 sn zaman sınırı, 2 MB sınır, sadece `https://www.trthaber.com/` linkleri, 15 dk bellek önbelleği, kaynak düşerse son liste.
+- `GET /currency` (`services/currency.py`): TCMB `kurlar/today.xml`, USD/EUR/GBP döviz alış (`settings.currency_codes`), bülten tarihi; aynı önbellek kalıbı; hiç veri yoksa 503.
+- Hizmet belgesi: `Contract.service_doc_path` + `has_service_doc` (migration `db3d6a3cd914`), `POST/GET/DELETE /contracts/{id}/service-doc`; sadece bitmiş kontrat (aktifte 409); kontrat silinince dosya da silinir. Orijinal dosya adı saklanmıyor.
+- Kontrat tarihleri: sign-on ve sign-off bugün + 1 günden sonra olamaz (422, `check_not_in_future`; `planned_end_date` hariç).
+- N+1 düzeltildi: `/contracts`, `/map`, `/voyages`, `/profile/stats` sorgularında `selectinload` (107 → 17 sorgu, veri arttıkça sabit).
+- Güvenlik (2026-11-16): kayıt için ayrı deneme sınırı (`register_throttle`, adres başına 15 dk'da 10, 429); login gövdesindeki token sadece `docs_enabled` iken (`Token.access_token` opsiyonel); `secret_key` en az 32 karakter (`Field(min_length=32)`).
+
+**Frontend (Claude):**
+- Giriş/kayıt tek kart (`AuthPage.jsx`, sekmeler, şifre gücü). Onboarding 4 adım (yukarıda).
+- Dashboard: tek "On board" kartı (kalan gün, bugün işaretli çubuk, sefer satırı: In port → Start voyage / Under way → EOSP; Sign off kartta sadece son 14 günde, diğer zaman "⋯" menüsünde). "From ashore" kartı: TRT başlıkları + altında TCMB kurları. Yükleme iskeleti, bağlantı hatasında Retry. Onaylanmamış taramalar "Check details" der, yenilenmiş belgenin eskisi uyarı vermez.
+- Profil: başlık (halka + "… sea service", "N days to go · TR rules"), tek istatistik şeridi, kazanılan rozetler madalyon (her serinin sadece en yükseği; "See all" penceresinde 25'i), "Next up" (en yakın 3), gemi tipleri, rekorlar. "Days in rank" kaldırıldı.
+- Contracts: rota haritalı kontrat kartları, kaydırma (dokunma, tekerlek, sürükleme). Açık kontrat kartı iki sütun, "‹ 3 / 8 ›", "⋯" (Edit / Delete + onay), hizmet belgesi satırı. Ortak sefer listesi `components/VoyageList.jsx` (Contracts ve Sea chart; yıl çizgileri, sadece devam eden seferde "UNDER WAY", hover'da haritada vurgu).
+- Sea chart kendi adresinde: `/chart?voyage=<id>` (yenileme ve geri tuşu çalışır); filtreler (gemi, yıl), etiket çakışma önleme (öncelik + hover'da ad), seçili seferin adı sağ altta.
+- Tasarım kuralları için `.claude/skills/sefername-design`; gözden geçirici için uygulama özeti `docs/app-brief.md`.
+
+**Açık kalanlar:** öğlen raporu (Noon) backend'i yok (ertelendi); hizmet belgesinin orijinal adı saklanmıyor; haber kaynağı arayüz diline göre seçilmiyor; şifremi unuttum yok (e-posta sistemi yok); şifre değişince diğer cihazların access token'ı 30 dk geçerli kalır; deneme sınırları bellekte (çoklu worker'da Redis); Docker hiç çalıştırılmadı; testler `mrz.py` dışında yok (MVP sonrası).
 
 ---
 
@@ -355,6 +378,8 @@ Her adımda kullanıcıya DevOps açısından "neden"ini anlat; bu kısım kulla
 ---
 
 ## 9. Sık kullanılan komutlar
+Uygulamayı tek komutla açmak (proje kökünde, git dışında): `.\start.ps1` (backend ve frontend için iki PowerShell penceresi açar, sonra tarayıcıyı). Çift tıklama Notepad'de açar; sağ tık → Run with PowerShell.
+
 ```
 venv\Scripts\activate
 uvicorn app.main:app --reload          # Swagger: http://127.0.0.1:8000/docs
