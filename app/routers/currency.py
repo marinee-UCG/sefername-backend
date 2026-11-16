@@ -1,11 +1,11 @@
 from fastapi import APIRouter,Depends,HTTPException,status
 
 from app.models.user import User
-from app.schemas.currency import CurrencyRate,CurrencyRateOut
+from app.schemas.currency import CurrencyRateOut
 
 from app.core.deps import get_current_user
 
-from app.services.currency import fetch_rates_xml,parse_rates,get_rates
+from app.services.currency import get_rates
 
 router=APIRouter(prefix="/currency",tags=["currency"])
 

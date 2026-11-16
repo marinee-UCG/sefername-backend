@@ -5,7 +5,7 @@ from datetime import date,datetime,timedelta,timezone
 
 from fastapi.security import OAuth2PasswordRequestForm
 from app.core.security import hash_password,verify_password,create_access_token,ACCESS_TOKEN_COOKIE,DUMMY_PASSWORD_HASH
-from app.core.rate_limit import login_throttle,MAX_FAILURES_PER_ACCOUNT,MAX_FAILURES_PER_ADDRESS
+from app.core.rate_limit import login_throttle,register_throttle,MAX_FAILURES_PER_ACCOUNT,MAX_FAILURES_PER_ADDRESS,MAX_REGISTRATIONS_PER_ADDRESS
 from app.core.sessions import REFRESH_TOKEN_COOKIE,SessionError,clear_cookies,end_session,refresh_session,start_session
 
 from app.database import get_db
@@ -17,7 +17,21 @@ from app.core.config import settings
 router =APIRouter(prefix="/auth",tags=["auth"])
 
 @router.post("/register",response_model=UserOut,status_code=status.HTTP_201_CREATED)
-def register(user_in:UserCreate,db:Session=Depends(get_db)):
+def register(user_in:UserCreate,request:Request,db:Session=Depends(get_db)):
+    # "Email already in use" tells whether an account exists, so sign-ups are limited per address:
+    # a person signs up once or twice, a script trying a list of emails hits the limit
+    address=request.client.host if request.client else "unknown"
+    address_key=f"register:{address}"
+    wait=register_throttle.retry_after(address_key,MAX_REGISTRATIONS_PER_ADDRESS)
+    if wait:
+        minutes=max(1,round(wait/60))
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many sign-ups from this network. Try again in {minutes} minute{'s' if minutes>1 else ''}.",
+            headers={"Retry-After":str(wait)},
+        )
+    register_throttle.record_failure(address_key)
+
     email=user_in.email.lower()
     existing=db.scalar(select(User).where(User.email==email))
     if existing:
@@ -72,8 +86,10 @@ def login(
         )
     login_throttle.reset(account_key)
     start_session(response,db,user.id,persistent=remember)
-    # The body keeps a token for Swagger's Authorize button; the app itself only uses the cookies
-    return {"access_token":create_access_token(user.id),"token_type":"bearer"}
+    # The app only uses the cookies. The token in the body is for Swagger's Authorize button, so it is
+    # sent only where Swagger is on: a script that sneaks into a page in production cannot read it here
+    token=create_access_token(user.id) if settings.docs_enabled else None
+    return {"access_token":token,"token_type":"bearer"}
 
 
 @router.post("/refresh",status_code=status.HTTP_204_NO_CONTENT)

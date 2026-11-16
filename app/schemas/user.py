@@ -45,5 +45,6 @@ class UserOut(BaseModel):
     onboarded_at:datetime | None
 
 class Token(BaseModel):
-    access_token:str
+    # Only filled where Swagger is on (settings.docs_enabled); the app signs in with cookies
+    access_token:str | None = None
     token_type:str = "bearer"

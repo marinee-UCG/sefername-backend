@@ -29,7 +29,8 @@ def parse_rates(data:bytes,codes:list[str]) -> dict:
         code=currency.attrib["Kod"]
         if code not in codes:
             continue
-        name=currency.findtext("CurrencyName")
+        # TCMB pads the names with spaces to a fixed width
+        name=(currency.findtext("CurrencyName") or "").strip()
         buying_text=currency.findtext("ForexBuying")
         if not buying_text:
             continue

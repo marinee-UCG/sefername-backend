@@ -1,8 +1,10 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings,SettingsConfigDict
 
 class Settings(BaseSettings):
     database_url:str
-    secret_key:str
+    # Signs every token: too short and it can be guessed, so the app will not start with one
+    secret_key:str=Field(min_length=32)
     algorithm:str="HS256"
     access_token_expire_minutes:int = 30
     # Refresh token: 30 days with "keep me signed in", otherwise one day (and the browser session)
