@@ -5,7 +5,7 @@ from app.core.config import settings
 
 
 from app.routers import account,auth,contracts,vessels,identity_document,certificates,ports,voyages,sea_map
-from app.routers import profile,news,currency,share_cards,imports
+from app.routers import profile,news,currency,share_cards,imports,noon_reports
 
 
 
@@ -35,3 +35,4 @@ app.include_router(news.router)
 app.include_router(currency.router)
 app.include_router(share_cards.router)
 app.include_router(imports.router)
+app.include_router(noon_reports.router)
