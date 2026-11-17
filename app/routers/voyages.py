@@ -13,7 +13,8 @@ from app.schemas.voyage import VoyageCreate,VoyageEosp,VoyageOut,VoyageUpdate
 from app.models.contract import Contract
 
 
-from app.services.routing import RouteError,sea_route
+from app.services.noon_track import voyage_route
+from app.services.routing import RouteError
 
 
 router=APIRouter(prefix="/voyages",tags=["voyages"])
@@ -34,10 +35,7 @@ def get_user_voyage_or_404(
 def voyage_out(voyage:Voyage)-> VoyageOut:
     out=VoyageOut.model_validate(voyage)
     try:
-        route=sea_route(
-            (voyage.from_port.lon,voyage.from_port.lat),
-            (voyage.to_port.lon,voyage.to_port.lat),
-        )
+        route=voyage_route(voyage)
         out.distance_nm=route.distance_nm
     except RouteError:
         pass
@@ -223,7 +221,7 @@ def list_voyages(
     current_user:User=Depends(get_current_user),
     db:Session=Depends(get_db)
 ):
-    query=select(Voyage).where(Voyage.user_id==current_user.id).options(selectinload(Voyage.from_port),selectinload(Voyage.to_port),selectinload(Voyage.contract).selectinload(Contract.vessel))
+    query=select(Voyage).where(Voyage.user_id==current_user.id).options(selectinload(Voyage.from_port),selectinload(Voyage.to_port),selectinload(Voyage.contract).selectinload(Contract.vessel),selectinload(Voyage.noon_reports))
     if contract_id is not None:
         query=query.where(Voyage.contract_id==contract_id)
     query=query.order_by(Voyage.cosp_at.desc())

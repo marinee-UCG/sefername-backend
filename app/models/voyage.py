@@ -9,6 +9,7 @@ from app.database import Base
 if TYPE_CHECKING:
     from app.models.contract import Contract
     from app.models.port import Port
+    from app.models.noon_report import NoonReport
 
 class Voyage(Base):
     __tablename__="voyages"
@@ -40,6 +41,12 @@ class Voyage(Base):
     contract:Mapped["Contract"]=relationship()
     from_port:Mapped["Port"]=relationship(foreign_keys=[from_port_id])
     to_port:Mapped["Port"]=relationship(foreign_keys=[to_port_id])
+    # Oldest first. The database deletes them with the voyage (CASCADE), so the ORM leaves that to it
+    noon_reports:Mapped[list["NoonReport"]]=relationship(
+        order_by="NoonReport.recorded_at",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
     @property
     def is_active(self)-> bool:
         return self.eosp_at is None

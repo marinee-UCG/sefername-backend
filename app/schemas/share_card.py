@@ -48,3 +48,15 @@ class SignOnCardOut(BaseModel):
     planned_end_date:date | None
     vessel_type:str | None
     map_svg:str | None
+
+
+class UnderwayCardOut(BaseModel):
+    from_port:str
+    day_at_sea:int
+    area:str | None
+    latest_noon_at:datetime
+    sailed_nm:int
+    speed_kn:float | None
+    wind_bft:int | None
+    daily_nm:list[int]
+    map_svg:str

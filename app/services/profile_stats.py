@@ -2,7 +2,8 @@ from datetime import date,datetime,timedelta
 from app.schemas.profile import Promotion
 from app.schemas.profile import TypeDays,RankDays,ContractRecord,VoyageRecord,PortRecord
 from app.schemas.profile import MilestoneOut,ProfileRecords,ProfileStats,ProfileTotals
-from app.services.routing import RouteError,progress_fraction,route_prefix
+from app.services.noon_track import voyage_fraction
+from app.services.routing import RouteError,route_prefix
 from app.services.voyage_speed import estimated_speed_kn
 
 RANK_STEPS=[
@@ -156,7 +157,7 @@ def sailed_route(voyage,voyages,now:datetime,route_for):
         return None
     if voyage.eosp_at is not None:
         return route.coordinates,route.distance_nm
-    ratio=progress_fraction(voyage.cosp_at,route.distance_nm,now,estimated_speed_kn(voyage,voyages))
+    ratio=voyage_fraction(voyage,route,now,estimated_speed_kn(voyage,voyages))
     prefix=route_prefix(route.coordinates,ratio)
     sailed=route.distance_nm * ratio
 

@@ -1,8 +1,11 @@
 from datetime import date,timedelta
 from app.models.voyage import Voyage
 from app.models.contract import Contract
-from app.services.routing import RouteError,sea_route
-from app.services.chart_render import voyages_chart,voyage_chart,departure_chart,signon_chart
+from datetime import datetime
+from app.services.noon_track import track,voyage_route,with_distances
+from app.services.sea_areas import sea_area
+from app.services.routing import RouteError
+from app.services.chart_render import voyages_chart,voyage_chart,departure_chart,signon_chart,underway_chart
 
 def sea_days_flag(start:date,end:date,voyages:list[Voyage]) -> list[bool]:
     total_days=(end-start).days
@@ -23,10 +26,7 @@ def homeward_card(contract:Contract,voyages:list[Voyage]) -> dict:
         ports.add(v.from_port_id)
         ports.add(v.to_port_id)
         try:
-         r=sea_route(
-             (v.from_port.lon,v.from_port.lat),
-             (v.to_port.lon,v.to_port.lat),
-         )
+         r=voyage_route(v)
         except RouteError:
             continue
         sailed_nm +=r.distance_nm
@@ -51,10 +51,7 @@ def homeward_card(contract:Contract,voyages:list[Voyage]) -> dict:
 def eosp_card(voyage:Voyage,contract_voyages:list[Voyage]) -> dict:
     contract=voyage.contract
     try:
-        r=sea_route(
-            (voyage.from_port.lon,voyage.from_port.lat),
-            (voyage.to_port.lon,voyage.to_port.lat),
-        )
+        r=voyage_route(voyage)
     except RouteError:
         r=None
     hours=(voyage.eosp_at-voyage.cosp_at).total_seconds()/3600
@@ -149,4 +146,38 @@ def signon_card(contract: Contract, user_contracts: list[Contract]) -> dict:
         "planned_end_date": planned_end,
         "vessel_type": contract.vessel.vessel_type,
         "map_svg": signon_chart({"name": port.name, "lon": port.lon, "lat": port.lat}) if port else None,
+    }
+
+
+# The under way card shows where the ship was this long ago, never where it is now
+UNDERWAY_DELAY = timedelta(hours=48)
+
+
+def underway_card(voyage: Voyage, now: datetime) -> dict:
+    """A voyage under way, from its noon reports. The chart and the area name use only reports at least
+    48 hours old (the track's end fades out there); no destination anywhere. The numbers (miles, speed,
+    wind, daily distances) come from all reports: they tell how the passage goes, not where the ship is."""
+    reports = list(voyage.noon_reports)
+    latest = reports[-1]
+    port = voyage.from_port
+    start = (port.lon, port.lat)
+    # Only positions old enough to show
+    shown = [(r.lon, r.lat) for r in reports if r.recorded_at <= now - UNDERWAY_DELAY]
+    coords, _ = track([start] + shown) if shown else ((start,), 0.0)
+    where = shown[-1] if shown else start
+    # Miles and speed up to the latest noon, along the sea lanes like the rest of the app
+    _, sailed_nm = track([start] + [(r.lon, r.lat) for r in reports])
+    hours = (latest.recorded_at - voyage.cosp_at).total_seconds() / 3600
+    daily = [d["distance_nm"] for d in with_distances(voyage, reports)]
+    return {
+        "from_port": port.name,
+        "day_at_sea": (now - voyage.cosp_at).days + 1,
+        "area": sea_area(where[1], where[0]),
+        "latest_noon_at": latest.recorded_at,
+        "sailed_nm": round(sailed_nm),
+        "speed_kn": round(sailed_nm / hours, 1) if hours > 0 else None,
+        "wind_bft": latest.wind_bft,
+        # The last ten days, oldest first
+        "daily_nm": [round(d) for d in daily[-10:]],
+        "map_svg": underway_chart({"name": port.name, "lon": port.lon, "lat": port.lat}, coords),
     }

@@ -275,3 +275,55 @@ def signon_chart(port: dict) -> str:
     lx, anchor = (x - 30, "end") if left else (x + 30, "start")
     svg += text("t", lx, y + 58, port["name"].upper(), anchor) + text("ts", lx, y + 86, "SIGN-ON", anchor)
     return svg
+
+
+def _cut(points: list[tuple[float, float]], a: float, b: float) -> list[tuple[float, float]]:
+    """The part of a screen polyline between fractions `a` and `b` (0 to 1) of its length."""
+    lengths = [((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5 for (x1, y1), (x2, y2) in zip(points, points[1:])]
+    total = sum(lengths) or 1.0
+
+    def at(fraction):
+        goal, walked = fraction * total, 0.0
+        for (p, q), length in zip(zip(points, points[1:]), lengths):
+            if length > 0 and walked + length >= goal:
+                t = (goal - walked) / length
+                return (p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t), walked
+            walked += length
+        return points[-1], total
+
+    (start, _), (end, _) = at(a), at(b)
+    out, walked = [start], 0.0
+    for (p, q), length in zip(zip(points, points[1:]), lengths):
+        walked += length
+        if a * total < walked < b * total:
+            out.append(q)
+    out.append(end)
+    return out
+
+
+def underway_chart(start: dict, coords) -> str:
+    """A voyage under way: the under way card. The track from the departure port, drawn only up to
+    a position two days old (the caller cuts it), its end fading out: a direction, never where the ship is.
+    No destination. `start`: {"name", "lon", "lat"}; `coords`: the delayed track, (lon, lat), from the port.
+    """
+    line = unwrap(coords)
+    if len(line) < 2:
+        return departure_chart(start)
+    P = fit_view(line, (120, 250, 960, 1075), min_span=5.0)
+    screen = [P(lon, lat) for lon, lat in line]
+    svg = graticule(P) + land(P, 1.1)
+    # The first 70% solid, the rest in eight steps, each fainter than the one before
+    main = _cut(screen, 0.0, 0.7)
+    d = "M" + "L".join(f"{x:.1f} {y:.1f}" for x, y in main)
+    svg += f'<path d="{d}" fill="none" stroke="var(--halo)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>'
+    svg += f'<path d="{d}" fill="none" stroke="var(--acc)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>'
+    steps = 8
+    for i in range(steps):
+        piece = _cut(screen, 0.7 + 0.3 * i / steps, 0.7 + 0.3 * (i + 1) / steps)
+        d = "M" + "L".join(f"{x:.1f} {y:.1f}" for x, y in piece)
+        opacity = 0.9 * (1 - (i + 1) / (steps + 1))
+        svg += f'<path d="{d}" fill="none" stroke="var(--acc)" stroke-opacity="{opacity:.2f}" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>'
+    sx, sy = screen[0]
+    svg += f'<circle cx="{sx:.1f}" cy="{sy:.1f}" r="13" fill="var(--halo)" stroke="var(--acc)" stroke-width="5.5"/>'
+    svg += _end_label(P, *line[0], start["name"], "COSP", [])
+    return svg

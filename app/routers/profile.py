@@ -15,7 +15,7 @@ from app.models.voyage import Voyage
 
 from app.schemas.profile import ProfileStats
 
-from app.services.routing import sea_route
+from app.services.noon_track import voyage_route
 from app.services.profile_stats import build_profile_stats
 
 router=APIRouter(prefix="/profile",tags=["profile"])
@@ -31,17 +31,14 @@ def get_profile_stats(
     contract_query=select(Contract).where(Contract.user_id==current_user.id).options(selectinload(Contract.vessel))
     contracts=db.scalars(contract_query).all()
 
-    voyage_query=select(Voyage).where(Voyage.user_id==current_user.id).options(selectinload(Voyage.from_port),selectinload(Voyage.to_port))
+    voyage_query=select(Voyage).where(Voyage.user_id==current_user.id).options(selectinload(Voyage.from_port),selectinload(Voyage.to_port),selectinload(Voyage.contract).selectinload(Contract.vessel),selectinload(Voyage.noon_reports))
     voyages=db.scalars(voyage_query).all()
 
     now=datetime.now(timezone.utc)
 
     def route_for(voyage):
-
-        return sea_route(
-            (voyage.from_port.lon,voyage.from_port.lat),
-            (voyage.to_port.lon,voyage.to_port.lat),
-        )
+        # Through the noon positions when the voyage has them
+        return voyage_route(voyage)
     return build_profile_stats(current_user,contracts,voyages,now.date(),now,route_for,settings.promotion_service_days)
 
 

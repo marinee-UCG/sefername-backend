@@ -1,5 +1,6 @@
 from app.models.voyage import Voyage
-from app.services.routing import PLANNED_SPEED_KN,RouteError,sea_route
+from app.services.noon_track import voyage_route
+from app.services.routing import PLANNED_SPEED_KN,RouteError
 
 def estimated_speed_kn(voyage:Voyage,voyages:list[Voyage]) -> float:
     total_nm=0.0
@@ -13,10 +14,7 @@ def estimated_speed_kn(voyage:Voyage,voyages:list[Voyage]) -> float:
         if past.contract.vessel_id != vessel.id:
             continue
         try:
-            total_nm+=sea_route(
-                (past.from_port.lon,past.from_port.lat),
-                (past.to_port.lon,past.to_port.lat)
-                ).distance_nm
+            total_nm+=voyage_route(past).distance_nm
         except RouteError:
             continue
         total_time+=(past.eosp_at-past.cosp_at).total_seconds()/3600

@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -6,8 +7,8 @@ from app.database import get_db
 from app.models.contract import Contract
 from app.models.voyage import Voyage
 from app.routers.contracts import get_user_contract_or_404
-from app.schemas.share_card import HomewardCardOut,EospCardOut,CospCardOut,SignOnCardOut
-from app.services.share_cards import homeward_card,eosp_card,cosp_card,signon_card
+from app.schemas.share_card import HomewardCardOut,EospCardOut,CospCardOut,SignOnCardOut,UnderwayCardOut
+from app.services.share_cards import homeward_card,eosp_card,cosp_card,signon_card,underway_card
 from app.routers.voyages import get_user_voyage_or_404
 
 
@@ -27,6 +28,7 @@ def get_homeward_card(
     query=select(Voyage).where(Voyage.contract_id==contract.id).options(
         selectinload(Voyage.from_port),
         selectinload(Voyage.to_port),
+        selectinload(Voyage.noon_reports),
     )
     voyages=db.scalars(query).all()
     return homeward_card(contract,voyages)
@@ -44,6 +46,7 @@ def get_eosp_card(
     query=select(Voyage).where(Voyage.contract_id==voyage.contract_id).options(
         selectinload(Voyage.from_port),
         selectinload(Voyage.to_port),
+        selectinload(Voyage.noon_reports),
     )
     voyages=db.scalars(query).all()
     return eosp_card(voyage,voyages)
@@ -67,3 +70,18 @@ def get_signon_card(
     # Any contract, active or ended. Its port shows where the ship was: the app warns before sharing.
     user_contracts = db.scalars(select(Contract).where(Contract.user_id == contract.user_id)).all()
     return signon_card(contract, user_contracts)
+
+
+@router.get("/voyages/{voyage_id}/underway", response_model=UnderwayCardOut)
+def get_underway_card(voyage: Voyage = Depends(get_user_voyage_or_404)):
+    if voyage.eosp_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This voyage has ended. Share its EOSP card instead.",
+        )
+    if not voyage.noon_reports:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Add a noon report first: the under way card is drawn from them.",
+        )
+    return underway_card(voyage, datetime.now(timezone.utc))

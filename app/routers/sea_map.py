@@ -1,4 +1,4 @@
-from datetime import datetime,timedelta,timezone
+from datetime import datetime,timezone
 
 from fastapi import APIRouter,Depends
 from sqlalchemy import select
@@ -11,16 +11,17 @@ from app.models.user import User
 from app.models.voyage import Voyage
 from app.schemas.map import MapOut,MapTotals,MapPosition,MapVoyage
 from app.schemas.port import PortOut
-from app.services.routing import RouteError,SeaRoute,point_along_route,sea_route,progress_fraction
+from app.services.noon_track import VoyageRoute,voyage_eta,voyage_fraction,voyage_route
+from app.services.routing import RouteError,point_along_route
 from app.services.voyage_speed import estimated_speed_kn
 
 router=APIRouter(prefix="/map",tags=["map"])
 
 
 
-def approximate_position(voyage:Voyage,route:SeaRoute,speed_kn:float) -> MapPosition:
-    expected_hours=route.distance_nm/speed_kn
-    fraction=progress_fraction(voyage.cosp_at,route.distance_nm,datetime.now(timezone.utc),speed_kn)
+def approximate_position(voyage:Voyage,route:VoyageRoute,speed_kn:float) -> MapPosition:
+    # From the last noon report when there is one, otherwise from COSP at the estimated speed
+    fraction=voyage_fraction(voyage,route,datetime.now(timezone.utc),speed_kn)
     lon,lat=point_along_route(route.coordinates,fraction)
 
 
@@ -28,7 +29,7 @@ def approximate_position(voyage:Voyage,route:SeaRoute,speed_kn:float) -> MapPosi
         lat=round(lat),
         lon=round(lon),
         progress=round(fraction*100),
-        eta=voyage.cosp_at+timedelta(hours=expected_hours),
+        eta=voyage_eta(voyage,route,speed_kn),
     )
 
 
@@ -37,7 +38,7 @@ def get_map(
     current_user:User=Depends(get_current_user),
     db:Session=Depends(get_db)
 ):
-    query=select(Voyage).where(Voyage.user_id==current_user.id).options(selectinload(Voyage.from_port),selectinload(Voyage.to_port),selectinload(Voyage.contract).selectinload(Contract.vessel)).order_by(Voyage.cosp_at.desc())
+    query=select(Voyage).where(Voyage.user_id==current_user.id).options(selectinload(Voyage.from_port),selectinload(Voyage.to_port),selectinload(Voyage.contract).selectinload(Contract.vessel),selectinload(Voyage.noon_reports)).order_by(Voyage.cosp_at.desc())
     voyages=db.scalars(query).all()
 
     map_voyages=[]
@@ -50,10 +51,8 @@ def get_map(
         ports[voyage.to_port_id]=voyage.to_port
         item=MapVoyage.model_validate(voyage)
         try:
-            route=sea_route(
-                (voyage.from_port.lon,voyage.from_port.lat),
-                (voyage.to_port.lon,voyage.to_port.lat),
-            )
+            # Through the noon positions when there are any, otherwise the planned route
+            route=voyage_route(voyage)
         except RouteError:
             map_voyages.append(item)
             continue
