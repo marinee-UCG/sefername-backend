@@ -2,7 +2,7 @@ from datetime import date,timedelta
 from app.models.voyage import Voyage
 from app.models.contract import Contract
 from app.services.routing import RouteError,sea_route
-from app.services.chart_render import voyages_chart,voyage_chart
+from app.services.chart_render import voyages_chart,voyage_chart,departure_chart
 
 def sea_days_flag(start:date,end:date,voyages:list[Voyage]) -> list[bool]:
     total_days=(end-start).days
@@ -90,4 +90,33 @@ def eosp_card(voyage:Voyage,contract_voyages:list[Voyage]) -> dict:
             {"name": voyage.to_port.name, "lon": voyage.to_port.lon, "lat": voyage.to_port.lat},
             r.coordinates,
         ) if r else None,
+    }
+
+
+def _deg_min(value: float, pos: str, neg: str, width: int) -> str:
+    """40.966 -> "40°58′N": the port's position, as a chart would write it."""
+    hemi = pos if value >= 0 else neg
+    value = abs(value)
+    degrees, minutes = int(value), round(value % 1 * 60)
+    if minutes == 60:
+        degrees, minutes = degrees + 1, 0
+    return f"{degrees:0{width}d}°{minutes:02d}′{hemi}"
+
+
+def cosp_card(voyage: Voyage, contract_voyages: list[Voyage]) -> dict:
+    """COSP: a voyage has begun. Shows the departure port only (safety rule: no route, no destination)."""
+    contract = voyage.contract
+    port = voyage.from_port
+    cosp_day = voyage.cosp_at.date()
+    ordered = sorted(contract_voyages, key=lambda v: v.cosp_at)
+    # Sea days of this contract before this voyage began (its own days are still to come)
+    earlier = [v for v in ordered if v.id != voyage.id and v.eosp_at is not None and v.eosp_at <= voyage.cosp_at]
+    return {
+        "port": port.name,
+        "position": f"{_deg_min(port.lat, 'N', 'S', 2)} · {_deg_min(port.lon, 'E', 'W', 3)}",
+        "cosp_at": voyage.cosp_at,
+        "contract_day": (cosp_day - contract.start_date).days + 1,
+        "voyage_number": [v.id for v in ordered].index(voyage.id) + 1,
+        "sea_days_before": sum(sea_days_flag(contract.start_date, cosp_day, earlier)),
+        "map_svg": departure_chart({"name": port.name, "lon": port.lon, "lat": port.lat}),
     }

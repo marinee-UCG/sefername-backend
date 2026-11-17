@@ -234,3 +234,24 @@ def voyage_chart(start: dict, end: dict, coords) -> str:
     svg += _end_label(P, *line[-1], end["name"], "EOSP", taken)
     svg += _end_label(P, *line[0], start["name"], "COSP", taken)
     return svg
+
+
+def departure_chart(port: dict) -> str:
+    """Where a voyage began: the COSP card. Only the port and rings around it; never the route or the
+    destination (the ship is at sea when this is shared; where it is going stays private).
+
+    `port`: {"name", "lon", "lat"}. A close view, about 3° wide, like the design's Istanbul card.
+    """
+    lon, lat = port["lon"], port["lat"]
+    P = Projection(lon - 1.45, lon + 1.45, lat - 0.6, lat + 0.55, (40, 250, 1040, 1075))
+    P = Projection(P.lon_at(0), P.lon_at(W), P.lat_at(CHART_H), P.lat_at(0), (0, 0, W, CHART_H))
+    x, y = P(lon, lat)
+    svg = graticule(P) + land(P, 0.9)
+    for r, opacity in ((210, 0.16), (140, 0.28), (76, 0.48)):
+        svg += f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r}" fill="none" stroke="var(--acc)" stroke-opacity="{opacity}" stroke-width="1.6"/>'
+    svg += f'<circle cx="{x:.1f}" cy="{y:.1f}" r="30" fill="var(--acc)" fill-opacity=".2"/>'
+    svg += f'<circle cx="{x:.1f}" cy="{y:.1f}" r="13" fill="var(--acc)" stroke="var(--halo)" stroke-width="4"/>'
+    right = x + 34 + 15 * len(port["name"]) < W - 20
+    lx, anchor = (x + 34, "start") if right else (x - 34, "end")
+    svg += text("t", lx, y + 62, port["name"].upper(), anchor) + text("ts", lx, y + 90, "COSP", anchor)
+    return svg

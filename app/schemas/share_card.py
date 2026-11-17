@@ -26,3 +26,12 @@ class EospCardOut(BaseModel):
     contract_day:int
     days:list[Literal["this","sea","port"]]
     map_svg:str | None
+
+class CospCardOut(BaseModel):
+    port:str
+    position:str
+    cosp_at:datetime
+    contract_day:int
+    voyage_number:int
+    sea_days_before:int
+    map_svg:str
