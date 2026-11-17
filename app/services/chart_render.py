@@ -200,3 +200,37 @@ def voyages_chart(legs: list[tuple[dict, dict, list]]) -> str:
             markers += port_marker(P, lon, lat, filled=first)
             labels += port_label(P, lon, lat, port["name"], taken)
     return svg + markers + labels
+
+
+def _end_label(P: Projection, lon: float, lat: float, name: str, tag: str, taken: list) -> str:
+    """Port name with COSP / EOSP under it, on the side of the port with room."""
+    x, y = P(lon, lat)
+    label = name.upper()
+    width = max(15 * len(label), 12 * len(tag)) + 10
+    right = x + 28 + width < W - 20
+    lx, anchor = (x + 28, "start") if right else (x - 28, "end")
+    for ly in (y - 4, y + 52, y - 60):
+        box = (lx if right else lx - width, ly - 24, (lx + width) if right else lx, ly + 34)
+        if all(box[2] < t[0] or box[0] > t[2] or box[3] < t[1] or box[1] > t[3] for t in taken):
+            taken.append(box)
+            return text("t", lx, ly, label, anchor) + text("ts", lx, ly + 28, tag, anchor)
+    return ""
+
+
+def voyage_chart(start: dict, end: dict, coords) -> str:
+    """One finished voyage: the EOSP card. Departure as an open ring, arrival filled with a soft halo.
+
+    `start` / `end`: {"name", "lon", "lat"}; `coords`: the sea route between them.
+    Times are not drawn here: the app writes them in the user's own time zone.
+    """
+    line = unwrap(coords)
+    P = fit_view(line, (120, 250, 960, 1075))
+    (sx, sy), (ex, ey) = P(*line[0]), P(*line[-1])
+    svg = graticule(P) + land(P, 1.1) + route(P, line, width=5.5)
+    svg += f'<circle cx="{sx:.1f}" cy="{sy:.1f}" r="13" fill="var(--halo)" stroke="var(--acc)" stroke-width="5.5"/>'
+    svg += f'<circle cx="{ex:.1f}" cy="{ey:.1f}" r="26" fill="var(--acc)" fill-opacity=".22"/>'
+    svg += f'<circle cx="{ex:.1f}" cy="{ey:.1f}" r="13" fill="var(--acc)"/>'
+    taken = []
+    svg += _end_label(P, *line[-1], end["name"], "EOSP", taken)
+    svg += _end_label(P, *line[0], start["name"], "COSP", taken)
+    return svg

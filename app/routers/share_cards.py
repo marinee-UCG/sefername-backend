@@ -6,8 +6,9 @@ from app.database import get_db
 from app.models.contract import Contract
 from app.models.voyage import Voyage
 from app.routers.contracts import get_user_contract_or_404
-from app.schemas.share_card import HomewardCardOut
-from app.services.share_cards import homeward_card
+from app.schemas.share_card import HomewardCardOut,EospCardOut
+from app.services.share_cards import homeward_card,eosp_card
+from app.routers.voyages import get_user_voyage_or_404
 
 
 router=APIRouter(prefix="/share-cards",tags=["share-cards"])
@@ -29,3 +30,20 @@ def get_homeward_card(
     )
     voyages=db.scalars(query).all()
     return homeward_card(contract,voyages)
+
+@router.get("/voyages/{voyage_id}/eosp",response_model=EospCardOut)
+def get_eosp_card(
+    voyage:Voyage=Depends(get_user_voyage_or_404),
+    db:Session=Depends(get_db)
+):
+    if voyage.eosp_at is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This voyage is still active. Card will be ready after EOSP"
+        )
+    query=select(Voyage).where(Voyage.contract_id==voyage.contract_id).options(
+        selectinload(Voyage.from_port),
+        selectinload(Voyage.to_port),
+    )
+    voyages=db.scalars(query).all()
+    return eosp_card(voyage,voyages)

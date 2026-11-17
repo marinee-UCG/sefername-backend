@@ -1,5 +1,6 @@
 from pydantic import BaseModel
-from datetime import date
+from datetime import date,datetime
+from typing import Literal
 
 class HomewardCardOut(BaseModel):
     vessel_name:str
@@ -11,4 +12,17 @@ class HomewardCardOut(BaseModel):
     sailed_nm:int
     ports:int
     days:list[bool]
+    map_svg:str | None
+
+class EospCardOut(BaseModel):
+    from_port:str
+    to_port:str
+    cosp_at:datetime
+    eosp_at:datetime
+    distance_nm:int | None
+    hours:float
+    speed_kn:float | None
+    voyage_number:int
+    contract_day:int
+    days:list[Literal["this","sea","port"]]
     map_svg:str | None
