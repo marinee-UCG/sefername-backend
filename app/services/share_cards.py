@@ -2,7 +2,7 @@ from datetime import date,timedelta
 from app.models.voyage import Voyage
 from app.models.contract import Contract
 from app.services.routing import RouteError,sea_route
-from app.services.chart_render import voyages_chart,voyage_chart,departure_chart
+from app.services.chart_render import voyages_chart,voyage_chart,departure_chart,signon_chart
 
 def sea_days_flag(start:date,end:date,voyages:list[Voyage]) -> list[bool]:
     total_days=(end-start).days
@@ -119,4 +119,34 @@ def cosp_card(voyage: Voyage, contract_voyages: list[Voyage]) -> dict:
         "voyage_number": [v.id for v in ordered].index(voyage.id) + 1,
         "sea_days_before": sum(sea_days_flag(contract.start_date, cosp_day, earlier)),
         "map_svg": departure_chart({"name": port.name, "lon": port.lon, "lat": port.lat}),
+    }
+
+
+def _same_rank(a: str, b: str) -> bool:
+    # Rank is free text: "Second Engineer" and "second  engineer" are the same rank ("2nd" is not, yet)
+    return " ".join(a.lower().split()) == " ".join(b.lower().split())
+
+
+def signon_card(contract: Contract, user_contracts: list[Contract]) -> dict:
+    """The sign-on card: rank, port, which contract this is, and the planned length.
+
+    `user_contracts`: all of the user's contracts (this one included), to count the ones before it.
+    The vessel's name is left out on purpose: the current ship stays private until sign-off.
+    """
+    earlier_or_this = [c for c in user_contracts if (c.start_date, c.id) <= (contract.start_date, contract.id)]
+    in_rank = [c for c in earlier_or_this if _same_rank(c.rank, contract.rank)]
+    # Planned length: the planned sign-off, or the real one for a contract already ended without a plan
+    planned_end = contract.planned_end_date or contract.end_date
+    port = contract.sign_on_port
+    return {
+        "rank": contract.rank,
+        "start_date": contract.start_date,
+        "port": port.name if port else None,
+        "position": f"{_deg_min(port.lat, 'N', 'S', 2)} · {_deg_min(port.lon, 'E', 'W', 3)}" if port else None,
+        "contract_number": len(earlier_or_this),
+        "rank_contract_number": len(in_rank),
+        "planned_days": (planned_end - contract.start_date).days if planned_end else None,
+        "planned_end_date": planned_end,
+        "vessel_type": contract.vessel.vessel_type,
+        "map_svg": signon_chart({"name": port.name, "lon": port.lon, "lat": port.lat}) if port else None,
     }

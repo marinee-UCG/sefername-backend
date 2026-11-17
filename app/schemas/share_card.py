@@ -35,3 +35,16 @@ class CospCardOut(BaseModel):
     voyage_number:int
     sea_days_before:int
     map_svg:str
+
+
+class SignOnCardOut(BaseModel):
+    rank:str
+    start_date:date
+    port:str | None
+    position:str | None
+    contract_number:int
+    rank_contract_number:int
+    planned_days:int | None
+    planned_end_date:date | None
+    vessel_type:str | None
+    map_svg:str | None

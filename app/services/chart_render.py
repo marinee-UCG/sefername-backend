@@ -255,3 +255,23 @@ def departure_chart(port: dict) -> str:
     lx, anchor = (x + 34, "start") if right else (x - 34, "end")
     svg += text("t", lx, y + 62, port["name"].upper(), anchor) + text("ts", lx, y + 90, "COSP", anchor)
     return svg
+
+
+def signon_chart(port: dict) -> str:
+    """Where a contract began: the sign-on card. The port, a soft halo and its name; a close view
+    about 3° wide like the COSP card, but without the rings (nothing has sailed yet).
+
+    `port`: {"name", "lon", "lat"}. No date on the chart: the phone writes dates in its own language.
+    """
+    lon, lat = port["lon"], port["lat"]
+    P = Projection(lon - 1.45, lon + 1.45, lat - 0.6, lat + 0.55, (40, 250, 1040, 1075))
+    P = Projection(P.lon_at(0), P.lon_at(W), P.lat_at(CHART_H), P.lat_at(0), (0, 0, W, CHART_H))
+    x, y = P(lon, lat)
+    svg = graticule(P) + land(P, 0.9)
+    svg += f'<circle cx="{x:.1f}" cy="{y:.1f}" r="30" fill="var(--acc)" fill-opacity=".2"/>'
+    svg += f'<circle cx="{x:.1f}" cy="{y:.1f}" r="13" fill="var(--halo)" stroke="var(--acc)" stroke-width="5.5"/>'
+    # Name below the port, on the side with room (the design puts it to the lower left)
+    left = x - 30 - 15 * len(port["name"]) > 20
+    lx, anchor = (x - 30, "end") if left else (x + 30, "start")
+    svg += text("t", lx, y + 58, port["name"].upper(), anchor) + text("ts", lx, y + 86, "SIGN-ON", anchor)
+    return svg

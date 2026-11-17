@@ -1,6 +1,7 @@
 from pydantic import BaseModel,ConfigDict,Field
 from datetime import date
 from app.schemas.vessel import VesselCreate,VesselOut
+from app.schemas.port import PortOut
 
 
 
@@ -13,6 +14,7 @@ class ContractCreate(BaseModel):
     planned_end_date:date |None = None
     vessel_id:int |None = None
     vessel:VesselCreate | None = None
+    sign_on_port_id:int | None =None
 
 class ContractOut(BaseModel):
     model_config=ConfigDict(from_attributes=True)
@@ -25,6 +27,7 @@ class ContractOut(BaseModel):
     vessel:VesselOut
     planned_end_date:date | None
     has_service_doc:bool
+    sign_on_port:PortOut| None
 
 class ContractUpdate(BaseModel):
     company:str | None=Field(default=None,min_length=1,max_length=100)
@@ -32,6 +35,7 @@ class ContractUpdate(BaseModel):
     start_date:date |None = None
     end_date:date | None= None
     planned_end_date:date |None = None
+    sign_on_port_id:int | None =None
 
 
 

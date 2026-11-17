@@ -14,6 +14,7 @@ from app.database import get_db
 from app.models.contract import Contract
 from app.models.user import User
 from app.models.vessel import Vessel
+from app.models.port import Port
 from app.models.voyage import Voyage
 from app.schemas.contract import ContractCreate,ContractOut,ContractUpdate
 
@@ -67,7 +68,7 @@ def check_no_overlap(db:Session,user_id:int,start:date,end:date | None,exclude_i
 
 @router.get("",response_model=list[ContractOut])
 def get_contract(current_user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-    query=select(Contract).where(Contract.user_id==current_user.id).options(selectinload(Contract.vessel)).order_by(Contract.start_date.desc())
+    query=select(Contract).where(Contract.user_id==current_user.id).options(selectinload(Contract.vessel),selectinload(Contract.sign_on_port)).order_by(Contract.start_date.desc())
 
     return db.scalars(query).all()
 
@@ -110,6 +111,11 @@ def create_contract(
             )
 
     check_no_overlap(db,current_user.id,contract_in.start_date,contract_in.end_date)
+    if contract_in.sign_on_port_id is not None and db.get(Port,contract_in.sign_on_port_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Unknown sign-on port"
+        )
 
     if contract_in.vessel_id is not None:
         vessel = db.scalar(
@@ -129,7 +135,8 @@ def create_contract(
         end_date=contract_in.end_date,
         vessel_id=vessel.id,
         user_id=current_user.id,
-        planned_end_date=contract_in.planned_end_date
+        planned_end_date=contract_in.planned_end_date,
+        sign_on_port_id=contract_in.sign_on_port_id
     )
     db.add(contract)
     db.commit()
@@ -171,6 +178,13 @@ def update_contract(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"{field} cannot be null.",
             )
+    # null = remove the sign-on port (allowed); a number must be a real port
+    new_port_id = update_data.get("sign_on_port_id")
+    if new_port_id is not None and db.get(Port, new_port_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Unknown sign-on port",
+        )
 
     # Tarih kontrolü: güncelleme sonrası oluşacak değerlerle
     new_start = update_data.get("start_date", contract.start_date)

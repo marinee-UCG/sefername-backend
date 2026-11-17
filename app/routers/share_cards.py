@@ -6,8 +6,8 @@ from app.database import get_db
 from app.models.contract import Contract
 from app.models.voyage import Voyage
 from app.routers.contracts import get_user_contract_or_404
-from app.schemas.share_card import HomewardCardOut,EospCardOut,CospCardOut
-from app.services.share_cards import homeward_card,eosp_card,cosp_card
+from app.schemas.share_card import HomewardCardOut,EospCardOut,CospCardOut,SignOnCardOut
+from app.services.share_cards import homeward_card,eosp_card,cosp_card,signon_card
 from app.routers.voyages import get_user_voyage_or_404
 
 
@@ -57,3 +57,13 @@ def get_cosp_card(
     # Allowed while under way too: the card never shows the route or the destination
     query = select(Voyage).where(Voyage.contract_id == voyage.contract_id)
     return cosp_card(voyage, db.scalars(query).all())
+
+
+@router.get("/contracts/{contract_id}/sign-on", response_model=SignOnCardOut)
+def get_signon_card(
+    contract: Contract = Depends(get_user_contract_or_404),
+    db: Session = Depends(get_db),
+):
+    # Any contract, active or ended. Its port shows where the ship was: the app warns before sharing.
+    user_contracts = db.scalars(select(Contract).where(Contract.user_id == contract.user_id)).all()
+    return signon_card(contract, user_contracts)
