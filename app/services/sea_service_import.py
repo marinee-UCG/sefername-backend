@@ -76,7 +76,7 @@ def text(value) -> str | None:
 
 
 def parse_sea_service(content:bytes) ->list[dict]:
-    columns,rows=read_sheet(content,REQUIRED_HEADERS,"This is not the sea service file from e-Devlet.")
+    columns,rows=read_sheet(content,REQUIRED_HEADERS,"This file does not look like a sea service record.")
 
     services=[]
     for row in rows:

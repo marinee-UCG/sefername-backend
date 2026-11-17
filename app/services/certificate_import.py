@@ -44,7 +44,7 @@ ISSUING_INSTITUTION = "T.C. Ulaştırma ve Altyapı Bakanlığı"
 
 
 def parse_certificates(content: bytes) -> list[dict]:
-    columns, rows = read_sheet(content, REQUIRED_HEADERS, "This is not the certificate file from e-Devlet.")
+    columns, rows = read_sheet(content, REQUIRED_HEADERS, "This file does not look like a certificate record.")
 
     certificates = []
     for row in rows:
