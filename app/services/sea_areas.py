@@ -68,3 +68,38 @@ def sea_area(lat: float, lon: float) -> str | None:
             if lon0 <= x <= lon1 and lat0 <= lat <= lat1:
                 return name
     return None
+
+
+def area_stats(passages: list[tuple[list[tuple[float, float]], float, int]]) -> list[dict]:
+    """Days, miles and voyages per sea area, for the sea chart's hover.
+
+    `passages`: (sailed coordinates as (lon, lat), hours at sea, voyage id) for each voyage.
+    Each leg's miles go to the area of its middle; a voyage's hours are shared out by those miles.
+    Every area is returned (in AREAS order, most specific first) so the app can tell which one the
+    pointer is over; the ones never sailed have zeros.
+    """
+    from app.services.noon_track import haversine_nm
+
+    totals = {name: {"nm": 0.0, "hours": 0.0, "voyages": set()} for name, _ in AREAS}
+    for coordinates, hours, voyage_id in passages:
+        legs = []
+        for (lon_a, lat_a), (lon_b, lat_b) in zip(coordinates, coordinates[1:]):
+            miles = haversine_nm(lat_a, lon_a, lat_b, lon_b)
+            name = sea_area((lat_a + lat_b) / 2, (lon_a + lon_b) / 2)
+            if name is not None and miles > 0:
+                legs.append((name, miles))
+        sailed = sum(miles for _, miles in legs)
+        for name, miles in legs:
+            totals[name]["nm"] += miles
+            totals[name]["hours"] += hours * miles / sailed if sailed else 0
+            totals[name]["voyages"].add(voyage_id)
+    return [
+        {
+            "name": name,
+            "box": list(box),
+            "nm": round(totals[name]["nm"]),
+            "days": round(totals[name]["hours"] / 24, 1),
+            "voyages": len(totals[name]["voyages"]),
+        }
+        for name, box in AREAS
+    ]

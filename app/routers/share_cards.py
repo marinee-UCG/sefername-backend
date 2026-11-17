@@ -49,7 +49,9 @@ def get_eosp_card(
         selectinload(Voyage.noon_reports),
     )
     voyages=db.scalars(query).all()
-    return eosp_card(voyage,voyages)
+    # All of the user's voyages, to tell a first call at this port
+    user_voyages=db.scalars(select(Voyage).where(Voyage.user_id==voyage.user_id)).all()
+    return eosp_card(voyage,voyages,user_voyages)
 
 
 @router.get("/voyages/{voyage_id}/cosp", response_model=CospCardOut)

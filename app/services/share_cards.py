@@ -48,7 +48,7 @@ def homeward_card(contract:Contract,voyages:list[Voyage]) -> dict:
         "map_svg":voyages_chart(legs) if legs else None,
     }
 
-def eosp_card(voyage:Voyage,contract_voyages:list[Voyage]) -> dict:
+def eosp_card(voyage:Voyage,contract_voyages:list[Voyage],user_voyages:list[Voyage] | None=None) -> dict:
     contract=voyage.contract
     try:
         r=voyage_route(voyage)
@@ -71,7 +71,14 @@ def eosp_card(voyage:Voyage,contract_voyages:list[Voyage]) -> dict:
         else:
             days.append("port")
     ordered=sorted(contract_voyages,key=lambda v:v.cosp_at)
+    # First time at this port: no other voyage of the user touched it before this one ended
+    port_id=voyage.to_port_id
+    first_call=not any(
+        v.id!=voyage.id and port_id in (v.from_port_id,v.to_port_id) and v.cosp_at<voyage.eosp_at
+        for v in (user_voyages or contract_voyages)
+    )
     return {
+        "first_call": first_call,
         "from_port": voyage.from_port.name,
         "to_port": voyage.to_port.name,
         "cosp_at": voyage.cosp_at,

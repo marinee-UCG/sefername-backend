@@ -15,6 +15,7 @@ class HomewardCardOut(BaseModel):
     map_svg:str | None
 
 class EospCardOut(BaseModel):
+    first_call:bool
     from_port:str
     to_port:str
     cosp_at:datetime
